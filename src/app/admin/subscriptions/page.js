@@ -505,14 +505,14 @@ export default function SubscriptionsPage() {
           
           <button 
             onClick={exportExcel}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-green-700 transition shadow-lg shadow-green-100"
+            className="w-full md:w-auto flex items-center justify-center gap-2 bg-green-600 text-white px-5 py-3 rounded-2xl font-black hover:bg-green-700 transition shadow-lg shadow-green-100"
           >
             <FaFileExcel />
-            تصدير كشف الشهر
+            <span>تصدير كشف الشهر</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="إجمالي الطلاب" value={stats.total} icon={<FaUserGraduate />} color="blue" />
           <StatCard 
             label="تم التحصيل" 
@@ -595,7 +595,7 @@ export default function SubscriptionsPage() {
           </div>
 
           {/* Status Tabs */}
-          <div className="flex bg-gray-100 p-1 rounded-2xl">
+          <div className="flex bg-gray-100 p-1 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
             {[
               { id: 'all', label: 'الكل', count: stats.total },
               { id: 'paid', label: 'المسددين', count: stats.paid },
@@ -604,7 +604,7 @@ export default function SubscriptionsPage() {
               <button
                 key={tab.id}
                 onClick={() => setStatusFilter(tab.id)}
-                className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
+                className={`flex-1 md:flex-none px-6 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap ${
                   statusFilter === tab.id 
                     ? 'bg-white text-blue-600 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
@@ -618,16 +618,16 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Students List */}
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-3xl border-2 border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full text-right border-collapse">
+      <div className="max-w-7xl mx-auto overflow-hidden">
+        <div className="bg-white rounded-[2rem] border-2 border-gray-100 shadow-sm overflow-x-auto custom-scrollbar">
+          <table className="w-full text-right border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-gray-50 border-b-2 border-gray-100 text-gray-600">
-                <th className="p-4 text-sm font-black italic">كود</th>
-                <th className="p-4 text-sm font-black">اسم الطالب</th>
-                <th className="p-4 text-sm font-black text-center">تفاصيل الاشتراك</th>
-                <th className="p-4 text-sm font-black text-center">المبلغ والملاحظات</th>
-                <th className="p-4 text-sm font-black text-center">الإجراءات</th>
+                <th className="p-4 text-xs font-black italic whitespace-nowrap">كود</th>
+                <th className="p-4 text-xs font-black whitespace-nowrap">اسم الطالب</th>
+                <th className="p-4 text-xs font-black text-center whitespace-nowrap">تفاصيل الاشتراك</th>
+                <th className="p-4 text-xs font-black text-center whitespace-nowrap">المبلغ والملاحظات</th>
+                <th className="p-4 text-xs font-black text-center whitespace-nowrap">الإجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -946,21 +946,22 @@ export default function SubscriptionsPage() {
   );
 }
 
-function StatCard({ label, value, icon, color }) {
+function StatCard({ label, value, icon, color, subLabel }) {
   const colors = {
-    blue: 'border-blue-100 bg-blue-50 text-blue-600',
-    green: 'border-green-100 bg-green-50 text-green-600',
-    red: 'border-red-100 bg-red-50 text-red-600'
+    blue: 'border-blue-100 bg-blue-100/50 text-blue-600',
+    green: 'border-green-100 bg-green-100/50 text-green-600',
+    red: 'border-red-100 bg-red-100/50 text-red-600'
   };
   
   return (
-    <div className={`p-5 rounded-3xl border-2 flex items-center gap-4 bg-white ${colors[color].split(' ')[0]} shadow-sm transition-all hover:shadow-md`}>
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${colors[color]}`}>
+    <div className={`p-5 rounded-[2rem] border-2 flex items-center gap-4 bg-white border-opacity-50 shadow-sm transition-all hover:shadow-md`}>
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0 ${colors[color]}`}>
         {icon}
       </div>
       <div>
-        <div className="text-xs font-black text-gray-400">{label}</div>
-        <div className="text-xl font-black text-gray-800">{value}</div>
+        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</div>
+        <div className="text-lg font-black text-gray-800 leading-tight">{value}</div>
+        {subLabel && <div className="text-[10px] font-bold text-gray-400 mt-0.5">{subLabel}</div>}
       </div>
     </div>
   );
