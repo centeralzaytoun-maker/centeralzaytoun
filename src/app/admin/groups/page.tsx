@@ -185,7 +185,7 @@ export default function GroupManager() {
             <select
               value={selectedGrade}
               onChange={(e) => setSelectedGrade(e.target.value)}
-              className="w-full h-12 md:h-14 p-3.5 bg-gray-50 border-2 border-gray-100 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:bg-white transition-all font-bold text-sm"
+              className="w-full h-12 md:h-14 p-3.5 bg-gray-50 border-2 border-gray-100 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:bg-white transition-all font-bold text-sm text-gray-900"
             >
               <option value="">-- اختر الصف --</option>
               {grades.map(grade => (
@@ -202,7 +202,7 @@ export default function GroupManager() {
               value={selectedCourseId}
               onChange={(e) => setSelectedCourseId(e.target.value)}
               disabled={!selectedGrade}
-              className="w-full h-12 md:h-14 p-3.5 bg-gray-50 border-2 border-gray-100 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:bg-white transition-all disabled:opacity-40 font-bold text-sm"
+              className="w-full h-12 md:h-14 p-3.5 bg-gray-50 border-2 border-gray-100 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:bg-white transition-all disabled:opacity-40 font-bold text-sm text-gray-900"
             >
               <option value="">-- اختر الكورس --</option>
               {filteredCourses.map(course => (
@@ -220,7 +220,7 @@ export default function GroupManager() {
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
               placeholder="مثلاً: مجموعة A"
-              className="w-full h-12 md:h-14 p-3.5 bg-gray-50 border-2 border-gray-100 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:bg-white transition-all font-bold text-sm"
+              className="w-full h-12 md:h-14 p-3.5 bg-gray-50 border-2 border-gray-100 rounded-xl md:rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:bg-white transition-all font-bold text-sm text-gray-900"
             />
           </div>
 
@@ -257,7 +257,7 @@ export default function GroupManager() {
                       type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      className="w-full h-11 p-3 border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 font-bold text-sm transition-all"
+                      className="w-full h-11 p-3 border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 font-bold text-sm transition-all text-gray-900"
                     />
                   </div>
                   <div>
@@ -268,7 +268,7 @@ export default function GroupManager() {
                         onClick={() => setIsCourseDropdownOpen(!isCourseDropdownOpen)}
                         className="w-full h-11 px-4 rounded-xl border-2 border-orange-100 outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-50 font-bold text-xs bg-white flex items-center justify-between transition-all"
                       >
-                        <span className="truncate">
+                        <span className="truncate text-gray-900">
                           {allCourses.find(c => c.id === editForm.course_id)?.name || 'اختر الكورس'}
                           {editForm.course_id && ` (${allCourses.find(c => c.id === editForm.course_id)?.grade})`}
                         </span>
