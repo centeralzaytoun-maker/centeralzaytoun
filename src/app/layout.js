@@ -39,6 +39,15 @@ export default function RootLayout({ children }) {
           </Providers>
         </ReactQueryProvider>
         
+        {/* نظام كشف الأخطاء للموبايل - يفتح فقط عند إضافة ?debug=true للرابط */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          if (typeof window !== 'undefined' && window.location.search.includes('debug=true')) {
+            var script = document.createElement('script');
+            script.src = "//cdn.jsdelivr.net/npm/eruda";
+            document.body.appendChild(script);
+            script.onload = function () { eruda.init() };
+          }
+        `}} />
       </body>
     </html>
   );
