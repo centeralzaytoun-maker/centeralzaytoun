@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/lesson-reminder",
-      "schedule": "*/1 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
