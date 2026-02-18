@@ -5,6 +5,7 @@
 
 -- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pg_trgm; -- لدعم البحث السريع بالأسماء
 
 -- 2. CORE SAAS TABLES
 CREATE TABLE IF NOT EXISTS public.centers (
@@ -105,18 +106,38 @@ CREATE TABLE IF NOT EXISTS public.groups (
 );
 
 CREATE TABLE IF NOT EXISTS public.students (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  center_id UUID REFERENCES public.centers(id),
-  full_name TEXT NOT NULL,
-  phone TEXT,
-  parent_phone TEXT,
-  grade TEXT,
-  school TEXT,
-  balance DECIMAL(10,2) DEFAULT 0,
-  pin_code TEXT,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  id uuid NOT NULL DEFAULT gen_random_uuid (),
+  created_at timestamp with time zone NULL DEFAULT now(),
+  name text NOT NULL,
+  phone text NULL,
+  parent_phone text NULL,
+  grade text NULL,
+  unique_id text NULL,
+  wallet_balance double precision NULL DEFAULT 0,
+  is_free boolean NULL DEFAULT false,
+  enrolled_courses text[] NULL,
+  course_discounts jsonb NULL,
+  has_wallet boolean NULL DEFAULT false,
+  enrollment_dates jsonb NULL,
+  group_ids jsonb NULL DEFAULT '{}'::jsonb,
+  total_debt numeric NULL DEFAULT 0,
+  deleted_at timestamp without time zone NULL,
+  is_new_in_course boolean NULL DEFAULT false,
+  center_id uuid REFERENCES public.centers(id),
+  access_code text NOT NULL DEFAULT '0'::text,
+  is_active boolean NOT NULL DEFAULT true,
+  subscription_type text NULL DEFAULT 'عادي'::text,
+  free_courses text[] NULL DEFAULT '{}'::text[],
+  center_only_courses text[] NULL DEFAULT '{}'::text[],
+  monthly_courses text[] NULL DEFAULT '{}'::text[],
+  constraint students_pkey primary key (id),
+  constraint students_unique_id_key unique (unique_id)
 );
+
+-- Indices for Students (Performance)
+CREATE INDEX IF NOT EXISTS idx_students_center_id ON public.students (center_id);
+CREATE INDEX IF NOT EXISTS idx_students_unique_id ON public.students (unique_id);
+CREATE INDEX IF NOT EXISTS idx_students_name_trgm ON public.students USING gin (name gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS public.schedule (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
