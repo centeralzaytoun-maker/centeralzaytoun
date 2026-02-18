@@ -15,6 +15,7 @@ export default function SupportChatPage() {
     const [messages, setMessages] = useState([]); // رسايل المحادثة المفتوحة
     const [newMessage, setNewMessage] = useState(''); // النص اللي بتكتبه
     const [loading, setLoading] = useState(true);
+    const [showMobileChat, setShowMobileChat] = useState(false); // 🔥 For mobile responsiveness
     const messagesEndRef = useRef(null); 
 
     // WhatsApp Features State
@@ -272,10 +273,10 @@ export default function SupportChatPage() {
     }
 
     return (
-        <div className="flex h-screen bg-gray-50 " dir="rtl">
+        <div className="flex h-screen bg-gray-50 overflow-hidden" dir="rtl">
             
             {/* 🟢 القائمة الجانبية (Sidebar) */}
-            <div className="w-1/3 border-l border-gray-200 bg-white flex flex-col">
+            <div className={`w-full md:w-1/3 border-l border-gray-200 bg-white flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
                 {/* Header */}
                 <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
                     <h2 className="font-black text-xl text-gray-800 flex items-center gap-2">
@@ -301,7 +302,10 @@ export default function SupportChatPage() {
                     ) : tickets.map(ticket => (
                         <div 
                             key={ticket.id}
-                            onClick={() => setSelectedTicket(ticket)}
+                            onClick={() => {
+                                setSelectedTicket(ticket);
+                                setShowMobileChat(true);
+                            }}
                             className={`p-4 border-b cursor-pointer transition-all hover:bg-blue-50 ${selectedTicket?.id === ticket.id ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
                         >
                             <div className="flex justify-between items-start mb-1">
@@ -325,18 +329,27 @@ export default function SupportChatPage() {
             </div>
 
             {/* 🔵 منطقة الشات (Chat Area) */}
-            <div className="flex-1 flex flex-col bg-[#eef1f6]">
+            <div className={`flex-1 flex flex-col bg-[#eef1f6] ${showMobileChat ? 'flex' : 'hidden md:flex'}`}>
                 {selectedTicket ? (
                     <>
                         {/* Chat Header */}
                         <div className="p-4 bg-white border-b flex justify-between items-center shadow-sm z-10">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                                {/* Back Button for Mobile */}
+                                <button 
+                                    onClick={() => setShowMobileChat(false)}
+                                    className="md:hidden h-10 w-10 bg-gray-50 text-gray-500 rounded-xl flex items-center justify-center border border-gray-100"
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 shrink-0">
                                     <FaUserCircle size={24}/>
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-800">{selectedTicket.students?.name}</h3>
-                                    <p className="text-xs text-green-600 flex items-center gap-1">
+                                <div className="truncate">
+                                    <h3 className="font-bold text-gray-800 text-sm md:text-base truncate">{selectedTicket.students?.name}</h3>
+                                    <p className="text-[10px] md:text-xs text-green-600 flex items-center gap-1">
                                         <FaCircle size={6}/> متصل (ولي الأمر)
                                     </p>
                                 </div>
@@ -344,9 +357,9 @@ export default function SupportChatPage() {
                             {/* 🔥 تم ربط الزرار بدالة الإغلاق */}
                             <button 
                                 onClick={closeTicket}
-                                className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 font-bold transition-all"
+                                className="text-[10px] md:text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 font-bold transition-all shrink-0"
                             >
-                                إغلاق التذكرة
+                                إغلاق
                             </button>
                         </div>
 
