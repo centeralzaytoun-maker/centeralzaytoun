@@ -27,9 +27,12 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
   const [loading, setLoading] = useState(true); 
   const isMounted = React.useRef(true); 
   const isSyncing = React.useRef(false);
+  const lastRequestId = React.useRef(0); // 🔥 لتتبع آخر طلب تحقق ومنع تداخل البيانات القديمة
   // 🛡️ دالة التحقق من صلاحية السنتر (Gatekeeper)
   const verifyCenterAccess = async (cid, forceUser = null, forceRole = null) => {
     if (!cid) return;
+    
+    const requestId = ++lastRequestId.current; // تحديد رقم الطلب الحالي
     
     // استخدام البيانات الممرة أو الموجودة في الـ state
     const activeUser = forceUser || user;
@@ -82,18 +85,26 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
                     console.log(`🛡️ verifyCenterAccess: Merged ${specificPerms.length} staff permissions`);
                 }
 
-                setAllowedFeatures(finalFeatures);
-            } else {
-                setAllowedFeatures(prev => prev || []); 
-            }
+            if (requestId !== lastRequestId.current) return; // 🛑 لو فيه طلب جديد بدأ، كنسل القديم
+
+            setAllowedFeatures(finalFeatures);
+          } else {
+            if (requestId !== lastRequestId.current) return;
+            setAllowedFeatures(prev => prev || []); 
+          }
         }
         return true; 
     } catch (err) {
+        // 🛡️ تجاهل أخطاء الإلغاء (AbortError) لأنها طبيعية عند التنقل السريع أو إعادة التحميل
+        if (err?.name === 'AbortError' || err?.message?.includes('AbortError')) {
+            console.log("📡 Auth Verification: Request was aborted (Normal behavior)");
+            return true;
+        }
+
         console.error("❌ Auth Verification Error:", err);
         if (err && typeof err === 'object') {
             console.error("Error Code:", err.code);
             console.error("Error Message:", err.message);
-            console.error("Full Error Object:", JSON.stringify(err, null, 2));
         }
         return true; 
     }
@@ -223,7 +234,11 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
             }
         }
     } catch (err) {
-        console.error("❌ Sync Error:", err);
+        if (err?.name === 'AbortError' || err?.message?.includes('AbortError')) {
+            console.log("📡 Auth Sync: Request aborted (Normal)");
+        } else {
+            console.error("❌ Sync Error:", err);
+        }
     }
 
     if (isMounted.current) {
