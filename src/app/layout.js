@@ -38,10 +38,6 @@ export default function RootLayout({ children }) {
             {children}
           </Providers>
         </ReactQueryProvider>
-
-        {/* سكربت الديباج للموبايل */}
-        <script src="//cdn.jsdelivr.net/npm/eruda"></script>
-        <script dangerouslySetInnerHTML={{ __html: 'eruda.init();' }} />
         
       </body>
     </html>
