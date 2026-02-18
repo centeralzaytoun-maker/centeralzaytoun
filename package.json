@@ -6,17 +6,39 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "reminder": "node scripts/send-lesson-reminder.js"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.3.2",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.93.3",
+    "@tanstack/react-query": "^5.90.20",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
+    "firebase": "^12.8.0",
+    "framer-motion": "^12.34.0",
+    "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.12.3",
+    "lucide-react": "^0.562.0",
     "next": "16.1.3",
+    "puppeteer": "^24.36.0",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-hot-toast": "^2.6.0",
+    "react-icons": "^5.5.0",
+    "recharts": "^3.7.0",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.4.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/react": "19.2.9",
     "eslint": "^9",
     "eslint-config-next": "16.1.3",
+    "supabase": "^2.72.8",
     "tailwindcss": "^4"
   }
 }

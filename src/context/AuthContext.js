@@ -1,0 +1,287 @@
+'use client';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase'; // تأكد من المسار الصحيح
+import { useRouter, usePathname } from 'next/navigation';
+
+const AuthContext = createContext({
+  user: null,
+  session: null,
+  centerId: null,
+  role: null,
+  allowedFeatures: null, 
+  loading: true,
+  signOut: async () => {},
+  activateCenter: (id) => {}, 
+});
+
+export const AuthProvider = ({ children, initialUser = null, initialRole = null, initialCenterId = null }) => {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // 1. القيم الابتدائية (State)
+  const [user, setUser] = useState(initialUser || null);
+  const [session, setSession] = useState(null);
+  const [centerId, setCenterId] = useState(initialCenterId || null);
+  const [role, setRole] = useState(initialRole || null);
+  const [allowedFeatures, setAllowedFeatures] = useState(null); 
+  const [loading, setLoading] = useState(true); 
+  const isMounted = React.useRef(true); 
+  const isSyncing = React.useRef(false);
+  // 🛡️ دالة التحقق من صلاحية السنتر (Gatekeeper)
+  const verifyCenterAccess = async (cid, forceUser = null, forceRole = null) => {
+    if (!cid) return;
+    
+    // استخدام البيانات الممرة أو الموجودة في الـ state
+    const activeUser = forceUser || user;
+    const activeRole = forceRole || role;
+
+    try {
+        const { data: centerData, error } = await supabase
+            .from('centers')
+            .select(`is_active, subscription_end_date, packages (package_features ( feature_id ))`)
+            .eq('id', cid)
+            .single();
+
+        if (error) throw error;
+
+        if (centerData) {
+            const isExpired = centerData.subscription_end_date && new Date(centerData.subscription_end_date) < new Date();
+            
+            // 🛑 لو السنتر منتهي أو غير نشط
+            if (!centerData.is_active || isExpired) {
+                console.warn("⛔ Center Access Denied: Expired or Inactive");
+                localStorage.removeItem("active_center_id");
+                setCenterId(null);
+                setAllowedFeatures([]); 
+                if (pathname !== '/expired') router.push('/expired');
+                return false;
+            }
+            
+            // ✅ تحديث الميزات (السيناريو الناجح)
+            if (centerData.packages?.package_features) {
+                const packageFeatures = centerData.packages.package_features.map(pf => pf.feature_id);
+                let finalFeatures = [...packageFeatures];
+
+                // 🔒 لو أدمن: ندمج صلاحيات السيستم
+                if (activeRole === 'admin' || activeRole === 'super_admin') {
+                    const { data: allPerms } = await supabase.from('permissions').select('key');
+                    const systemPerms = allPerms?.map(p => p.key) || [];
+                    const filteredSystemPerms = systemPerms.filter(k => !k.toLowerCase().startsWith('page_'));
+                    finalFeatures = [...new Set([...packageFeatures, ...filteredSystemPerms])];
+                } 
+                // 🔒 لو موظف: لازم نجيب أذوناته المخصصة
+                else if (activeRole === 'staff' && activeUser) {
+                    const { data: staffPerms } = await supabase
+                        .from('staff_permissions')
+                        .select('permission_key')
+                        .eq('staff_id', activeUser.id)
+                        .eq('center_id', cid);
+                    
+                    const specificPerms = staffPerms?.map(p => p.permission_key) || [];
+                    finalFeatures = [...new Set([...packageFeatures, ...specificPerms])];
+                    console.log(`🛡️ verifyCenterAccess: Merged ${specificPerms.length} staff permissions`);
+                }
+
+                setAllowedFeatures(finalFeatures);
+            } else {
+                setAllowedFeatures(prev => prev || []); 
+            }
+        }
+        return true; 
+    } catch (err) {
+        console.error("❌ Auth Verification Error:", err);
+        if (err && typeof err === 'object') {
+            console.error("Error Code:", err.code);
+            console.error("Error Message:", err.message);
+            console.error("Full Error Object:", JSON.stringify(err, null, 2));
+        }
+        return true; 
+    }
+  };
+
+  // دالة تفعيل السنتر يدوياً
+  const activateCenter = (id, forceUser = null, forceRole = null) => {
+    console.log("🎯 activateCenter called for:", id);
+    setCenterId(id);
+    localStorage.setItem("active_center_id", id);
+    // setAllowedFeatures(null); 🛑 شلنا دي عشان متمسحش الداتا وهي بتحمل
+    verifyCenterAccess(id, forceUser, forceRole);
+  };
+
+  // دالة جلب البروفايل
+  const fetchProfile = async (userId) => {
+     try {
+       const { data: staffData } = await supabase.from('staff_profiles').select('*').eq('id', userId).maybeSingle();
+       if (staffData) {
+           setCenterId(staffData.center_id);
+           setRole(staffData.role);
+           if (staffData.center_id) {
+               await verifyCenterAccess(staffData.center_id);
+           }
+       }
+     } catch (e) { console.error("Profile Fetch Error:", e) }
+  };
+
+  // ==========================================
+  // 🚨 منطق المزامنة الموحد (The Master Sync) 🚨
+  // ==========================================
+  const syncAuthState = async (event, currentSession) => {
+    if (!isMounted.current || isSyncing.current) return;
+    
+    isSyncing.current = true;
+    
+    let targetCid = null;
+    let targetRole = null;
+    let targetFeatures = [];
+    let targetUser = currentSession?.user || user; 
+
+    try {
+        // 1. التحقق من السنتر في الـ URL
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const urlCid = params.get('centerId') || params.get('cid');
+            if (urlCid) targetCid = urlCid;
+        }
+
+        // 2. التحقق من الـ LocalStorage لو مفيش في الـ URL
+        if (!targetCid) {
+            const savedCid = localStorage.getItem("active_center_id");
+            if (savedCid && savedCid !== 'null' && savedCid !== 'undefined') targetCid = savedCid;
+        }
+
+        // 3. التحقق من اليوزر والبروفايل (موظفين أو طلاب)
+        const userForProfile = targetUser;
+        if (userForProfile) {
+            // جرب نبحث في الموظفين أولاً
+            const { data: staffProfile } = await supabase
+                .from('staff_profiles')
+                .select('center_id, role')
+                .eq('id', userForProfile.id)
+                .maybeSingle();
+            
+                if (staffProfile) {
+                    targetCid = staffProfile.center_id || targetCid;
+                    targetRole = staffProfile.role;
+                } else {
+                    const { data: studentProfile } = await supabase
+                        .from('students')
+                        .select('center_id')
+                        .eq('id', userForProfile.id)
+                        .maybeSingle();
+                    
+                    if (studentProfile) {
+                        targetCid = studentProfile.center_id || targetCid;
+                        targetRole = 'student';
+                    }
+                }
+
+            if (targetCid) localStorage.setItem("active_center_id", targetCid);
+        }
+
+        // 4. جلب الميزات (Package Features + Staff Permissions)
+        if (targetCid && targetCid !== 'null' && targetCid !== 'undefined') {
+            console.log(`📦 Fetching Center Data for CID: ${targetCid}`);
+            const { data: centerData, error: centerError } = await supabase
+                .from('centers')
+                .select(`is_active, subscription_end_date, packages (package_features ( feature_id ))`)
+                .eq('id', targetCid)
+                .single();
+
+            if (centerError) console.error("❌ Center Data Fetch Error:", centerError);
+
+            if (centerData) {
+                const isExpired = centerData.subscription_end_date && new Date(centerData.subscription_end_date) < new Date();
+                if (centerData.is_active && !isExpired) {
+                    targetFeatures = centerData.packages?.package_features?.map(pf => pf.feature_id) || [];
+                    
+                    // 🔒 إضافة صلاحيات الموظف المحددة (Staff RBAC)
+                    if (targetUser && targetRole) {
+                        if (targetRole === 'admin' || targetRole === 'super_admin') {
+                            const { data: allPerms } = await supabase.from('permissions').select('key');
+                            const systemPerms = allPerms?.map(p => p.key) || [];
+                            const filteredSystemPerms = systemPerms.filter(key => !key.toLowerCase().startsWith('page_'));
+                            targetFeatures = [...new Set([...targetFeatures, ...filteredSystemPerms])];
+                        } else {
+                            const { data: staffPerms } = await supabase
+                                .from('staff_permissions')
+                                .select('permission_key')
+                                .eq('staff_id', targetUser.id)
+                                .eq('center_id', targetCid);
+                            
+                            const specificPerms = staffPerms?.map(p => p.permission_key) || [];
+                            console.log(`🔐 Fetched ${specificPerms.length} specific permissions for staff ${targetUser.id}`);
+                            // 🛡️ للموظف: ندمج ميزات الباقة (عشان السايدبار يعرف المديول متاح ولا لأ) 
+                            // مع الصلاحيات المحددة له فقط (عشان مياخدش حقه وحق غيره)
+                            targetFeatures = [...new Set([...targetFeatures, ...specificPerms])];
+                            console.log(`📡 Combined Features:`, targetFeatures);
+                        }
+                    }
+                } else {
+                    targetFeatures = [];
+                    if (pathname !== '/expired') router.push('/expired');
+                }
+            }
+        }
+    } catch (err) {
+        console.error("❌ Sync Error:", err);
+    }
+
+    if (isMounted.current) {
+        setSession(currentSession || null);
+        if (targetUser) setUser(targetUser);
+        if (targetCid) setCenterId(targetCid);
+        if (targetRole) setRole(targetRole);
+        setAllowedFeatures(targetFeatures);
+        setLoading(false);
+        isSyncing.current = false;
+    } else {
+        isSyncing.current = false;
+    }
+  };
+
+  useEffect(() => {
+    isMounted.current = true;
+
+    const init = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        await syncAuthState('INITIAL_SESSION', session);
+    };
+
+    init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event !== 'INITIAL_SESSION') syncAuthState(event, session);
+    });
+
+    return () => {
+        isMounted.current = false;
+        subscription.unsubscribe();
+    };
+  }, []);
+
+  // Gatekeeper عند تغيير الصفحة (فقط للتأكد في الخلفية)
+  useEffect(() => {
+      if (centerId && pathname && !pathname.includes('/expired') && !pathname.includes('/login')) {
+          // verifyCenterAccess(centerId); 🛑 قمنا بتعطيلها هنا لأن syncAuthState تتولى المهمة
+      }
+  }, [pathname]);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setCenterId(null);
+    setRole(null);
+    setAllowedFeatures(null);
+    localStorage.removeItem("active_center_id");
+    router.push('/login');
+  };
+
+  const value = {
+    user, session, centerId, role, allowedFeatures, loading, 
+    signOut, activateCenter, setUser, setSession, setCenterId, setRole, setAllowedFeatures, setLoading
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => useContext(AuthContext);
