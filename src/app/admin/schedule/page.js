@@ -519,7 +519,7 @@ function SchedulePage() {
                       onClick={() => setIsGradeDropOpen(!isGradeDropOpen)}
                       className="w-full h-12 px-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-xl flex items-center justify-between transition-all"
                     >
-                      <span className="text-xs font-black truncate">{selectedGrade || '-- اختر الصف --'}</span>
+                      <span className="text-xs font-black truncate text-gray-900">{selectedGrade || '-- اختر الصف --'}</span>
                       <svg className={`w-4 h-4 text-blue-600 transition-transform ${isGradeDropOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
@@ -558,7 +558,7 @@ function SchedulePage() {
                       onClick={() => setIsRoomDropOpen(!isRoomDropOpen)}
                       className="w-full h-12 px-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-xl flex items-center justify-between transition-all"
                     >
-                      <span className="text-xs font-black truncate">
+                      <span className="text-xs font-black truncate text-gray-900">
                         {formData.room_id ? rooms.find(r => r.id === formData.room_id)?.name : '-- اختر القاعة --'}
                       </span>
                       <svg className={`w-4 h-4 text-blue-600 transition-transform ${isRoomDropOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -601,7 +601,7 @@ function SchedulePage() {
                     onClick={() => setIsCourseDropOpen(!isCourseDropOpen)}
                     className="w-full h-12 px-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-xl flex items-center justify-between transition-all disabled:opacity-50"
                   >
-                    <span className="text-xs font-black truncate">
+                    <span className="text-xs font-black truncate text-gray-900">
                       {selectedCourseId ? (
                         `${filteredCourses.find(c => c.id === selectedCourseId)?.name} (أ/ ${filteredCourses.find(c => c.id === selectedCourseId)?.instructors?.name || filteredCourses.find(c => c.id === selectedCourseId)?.instructor || 'غير محدد'})`
                       ) : '-- اختر الكورس --'}
@@ -651,7 +651,7 @@ function SchedulePage() {
                     onClick={() => setIsGroupDropOpen(!isGroupDropOpen)}
                     className="w-full h-12 px-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-xl flex items-center justify-between transition-all disabled:opacity-50"
                   >
-                    <span className="text-xs font-black truncate">
+                    <span className="text-xs font-black truncate text-gray-900">
                       {formData.group_id ? filteredGroups.find(g => g.id === formData.group_id)?.name : '-- اختر المجموعة --'}
                     </span>
                     <svg className={`w-4 h-4 text-blue-600 transition-transform ${isGroupDropOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -692,7 +692,7 @@ function SchedulePage() {
                       onClick={() => setIsDayDropOpen(!isDayDropOpen)}
                       className="w-full h-12 px-4 bg-white border border-blue-100 focus:border-blue-500 rounded-xl flex items-center justify-between transition-all shadow-sm"
                     >
-                      <span className="text-xs font-black truncate">{days.find(d => d.id === formData.day_of_week)?.name}</span>
+                      <span className="text-xs font-black truncate text-gray-900">{days.find(d => d.id === formData.day_of_week)?.name}</span>
                       <svg className={`w-4 h-4 text-blue-600 transition-transform ${isDayDropOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
@@ -737,7 +737,7 @@ function SchedulePage() {
                       <input 
                         type="time" 
                         required 
-                        className="w-full h-10 px-2 bg-gray-50/50 rounded-xl text-xs font-black outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" 
+                        className="w-full h-10 px-2 bg-gray-50/50 rounded-xl text-xs font-black text-gray-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" 
                         value={formData.start_time} 
                         onChange={e => setFormData({...formData, start_time: e.target.value})} 
                       />
@@ -757,7 +757,7 @@ function SchedulePage() {
                       <input 
                         type="time" 
                         required 
-                        className="w-full h-10 px-2 bg-gray-50/50 rounded-xl text-xs font-black outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" 
+                        className="w-full h-10 px-2 bg-gray-50/50 rounded-xl text-xs font-black text-gray-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" 
                         value={formData.end_time} 
                         onChange={e => setFormData({...formData, end_time: e.target.value})} 
                       />
