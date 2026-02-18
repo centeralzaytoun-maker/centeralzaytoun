@@ -224,35 +224,44 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 -- This ensures that users can ONLY see data belonging to their center.
 
 -- Staff Profiles
-DROP POLICY IF EXISTS "Users can only access their center data" ON public.staff_profiles;
+DROP POLICY IF EXISTS "Staff Isolation" ON public.staff_profiles;
 CREATE POLICY "Staff Isolation" ON public.staff_profiles FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR role = 'super_admin');
 
 -- Students
-CREATE POLICY "Student Isolation" ON public.students FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Student Isolation" ON public.students;
+CREATE POLICY "Student Isolation" ON public.students FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Courses
-CREATE POLICY "Course Isolation" ON public.courses FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Course Isolation" ON public.courses;
+CREATE POLICY "Course Isolation" ON public.courses FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Groups
-CREATE POLICY "Group Isolation" ON public.groups FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Group Isolation" ON public.groups;
+CREATE POLICY "Group Isolation" ON public.groups FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Sessions
-CREATE POLICY "Session Isolation" ON public.sessions FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Session Isolation" ON public.sessions;
+CREATE POLICY "Session Isolation" ON public.sessions FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Attendance
-CREATE POLICY "Attendance Isolation" ON public.attendance FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Attendance Isolation" ON public.attendance;
+CREATE POLICY "Attendance Isolation" ON public.attendance FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Expenses
-CREATE POLICY "Expense Isolation" ON public.expenses FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Expense Isolation" ON public.expenses;
+CREATE POLICY "Expense Isolation" ON public.expenses FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Wallet Transactions
-CREATE POLICY "Wallet Isolation" ON public.wallet_transactions FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Wallet Isolation" ON public.wallet_transactions;
+CREATE POLICY "Wallet Isolation" ON public.wallet_transactions FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Exams
-CREATE POLICY "Exam Isolation" ON public.exams FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Exam Isolation" ON public.exams;
+CREATE POLICY "Exam Isolation" ON public.exams FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- Center Settings
-CREATE POLICY "Settings Isolation" ON public.center_settings FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()));
+DROP POLICY IF EXISTS "Settings Isolation" ON public.center_settings;
+CREATE POLICY "Settings Isolation" ON public.center_settings FOR ALL USING (center_id IN (SELECT center_id FROM public.staff_profiles WHERE id = auth.uid()) OR (SELECT role FROM public.staff_profiles WHERE id = auth.uid()) = 'super_admin');
 
 -- 9. 🚀 SEED DATA (The UI Heartbeat)
 -- Features (Page Modules)

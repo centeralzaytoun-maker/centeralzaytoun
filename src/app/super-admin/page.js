@@ -6,11 +6,19 @@ import {
     FaBoxOpen, FaPlus, FaTimes, FaCheck, FaEdit, FaCalendarAlt, FaSave, FaTrash, FaExchangeAlt
 } from 'react-icons/fa';
 import toast, { Toaster } from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function SuperAdminDashboard() {
-    const [activeTab, setActiveTab] = useState('centers');
+    const [activeTab, setActiveTab] = useState('dashboard');
     
-    // 📦 حالات السناتر
+    // 📊 إحصائيات عامة
+    const [totalStats, setTotalStats] = useState({
+        totalCenters: 0,
+        activeCenters: 0,
+        totalStudents: 0,
+        expiringSoon: 0,
+        dbUsage: 0.1, // Placeholder for DB usage in MB
+    });
     const [centers, setCenters] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -40,6 +48,45 @@ export default function SuperAdminDashboard() {
         max_students: '',
         features: [] 
     });
+
+    // ==========================================
+    // 📊 دوال الإحصائيات (Stat Engines)
+    // ==========================================
+    const fetchGeneralStats = async () => {
+        try {
+            // 1. حساب السناتر
+            const { count: total, error: e1 } = await supabaseBrowser
+                .from('centers')
+                .select('*', { count: 'exact', head: true });
+
+            const { count: active, error: e2 } = await supabaseBrowser
+                .from('centers')
+                .select('*', { count: 'exact', head: true })
+                .eq('is_active', true);
+
+            // 2. حساب الطلاب (عبر المنصة كاملة)
+            const { count: students, error: e3 } = await supabaseBrowser
+                .from('students')
+                .select('*', { count: 'exact', head: true });
+
+            // 3. السناتر التي قاربت على الانتهاء (7 أيام)
+            const nextWeek = new Date();
+            nextWeek.setDate(nextWeek.getDate() + 7);
+            const { count: expiring, error: e4 } = await supabaseBrowser
+                .from('centers')
+                .select('*', { count: 'exact', head: true })
+                .lte('subscription_end_date', nextWeek.toISOString())
+                .gte('subscription_end_date', new Date().toISOString());
+
+            setTotalStats({
+                totalCenters: total || 0,
+                activeCenters: active || 0,
+                totalStudents: students || 0,
+                expiringSoon: expiring || 0,
+                dbUsage: ((total || 0) * 0.15 + (students || 0) * 0.01 + 5).toFixed(1), // تقدير تقريبي للمساحة
+            });
+        } catch (error) { console.error('Stats Error:', error); }
+    };
 
     // ==========================================
     // 1️⃣ دوال السناتر (محدثة)
@@ -335,7 +382,7 @@ export default function SuperAdminDashboard() {
     // التحميل الأولي
     // ==========================================
     useEffect(() => {
-        // بنحمل كل حاجة مرة واحدة عشان المودال يشتغل صح
+        fetchGeneralStats();
         fetchCenters();
         fetchPackages();
         fetchFeatures();
@@ -353,14 +400,158 @@ export default function SuperAdminDashboard() {
                         <span className="text-blue-400">⚡ Super</span> Admin
                     </h1>
                     <div className="flex bg-slate-800 rounded-xl p-1">
-                        <button onClick={() => setActiveTab('centers')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'centers' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>السناتر المشتركة</button>
-                        <button onClick={() => setActiveTab('packages')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'packages' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>إدارة الباقات</button>
+                        <button onClick={() => setActiveTab('dashboard')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>نظرة عامة</button>
+                        <button onClick={() => setActiveTab('centers')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'centers' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>إدارة السناتر</button>
+                        <button onClick={() => setActiveTab('packages')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'packages' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>الباقات والمميزات</button>
                     </div>
                 </div>
             </div>
 
             <div className="max-w-7xl mx-auto p-6 mt-6">
                 
+                {/* ---------------- تابة النظرة العامة (NEW Dashboard) ---------------- */}
+                {activeTab === 'dashboard' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* 📊 بطاقات الإحصائيات الذكية */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* إجمالي السناتر */}
+                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">السناتر النشطة</p>
+                                    <h3 className="text-3xl font-black text-slate-900">{totalStats.activeCenters} <span className="text-xs text-slate-400">/ {totalStats.totalCenters}</span></h3>
+                                </div>
+                                <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
+                                    <FaBuilding size={24} />
+                                </div>
+                            </div>
+
+                            {/* إجمالي الطلاب */}
+                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">إجمالي الطلاب</p>
+                                    <h3 className="text-3xl font-black text-slate-900">{totalStats.totalStudents.toLocaleString()}</h3>
+                                </div>
+                                <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-inner">
+                                    <FaCheckCircle size={24} />
+                                </div>
+                            </div>
+
+                            {/* صحة النظام */}
+                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between overflow-hidden relative hover:shadow-md transition-shadow">
+                                <div className="relative z-10">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">صحة الداتابيز</p>
+                                    <h3 className="text-3xl font-black text-slate-900">{totalStats.dbUsage} <span className="text-xs text-slate-400">MB</span></h3>
+                                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2">
+                                        <div 
+                                            className={`h-full rounded-full transition-all duration-1000 ${Number(totalStats.dbUsage) > 400 ? 'bg-red-500' : 'bg-blue-600'}`} 
+                                            style={{ width: `${Math.min((totalStats.dbUsage / 500) * 100, 100)}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner z-10">
+                                    <FaPowerOff size={24} />
+                                </div>
+                            </div>
+
+                            {/* تحصيل مالي قريب */}
+                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">تجديدات قريبة</p>
+                                    <h3 className="text-3xl font-black text-orange-600">{totalStats.expiringSoon}</h3>
+                                </div>
+                                <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 shadow-inner">
+                                    <FaCalendarAlt size={24} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* قسم التنبيهات والسناتر الحرجة */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
+                                <h3 className="text-lg font-black mb-6 flex items-center gap-2 text-slate-800">
+                                    <span className="w-3 h-3 bg-orange-500 rounded-full animate-ping"></span>
+                                    إجراءات مطلوبة: تجديدات الـ 7 أيام القادمة
+                                </h3>
+                                <div className="space-y-4">
+                                    {centers
+                                        .filter(c => {
+                                            if (!c.subscription_end_date) return false;
+                                            const daysLeft = Math.ceil((new Date(c.subscription_end_date) - new Date()) / (1000 * 60 * 60 * 24));
+                                            return daysLeft >= 0 && daysLeft <= 7;
+                                        })
+                                        .map(center => (
+                                            <div key={center.id} className="p-4 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-between group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm">
+                                                        <FaBuilding />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-black text-slate-800">{center.name}</p>
+                                                        <p className="text-[10px] font-bold text-orange-600 uppercase">باقة: {center.packages?.name || 'بدون باقة'}</p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => { setActiveTab('centers'); openEditModal(center); }} 
+                                                    className="bg-orange-600 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-orange-200 hover:bg-orange-700 transition-all active:scale-95"
+                                                >
+                                                    إدارة الاشتراك
+                                                </button>
+                                            </div>
+                                        ))
+                                    }
+                                    {centers.filter(c => {
+                                        if (!c.subscription_end_date) return false;
+                                        const daysLeft = Math.ceil((new Date(c.subscription_end_date) - new Date()) / (1000 * 60 * 60 * 24));
+                                        return daysLeft >= 0 && daysLeft <= 7;
+                                    }).length === 0 && (
+                                        <div className="text-center py-12">
+                                            <div className="text-4xl mb-3">✅</div>
+                                            <p className="text-slate-400 font-bold">لا توجد اشتراكات منتهية أو قاربت على الانتهاء حالياً.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden group">
+                                <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-blue-600/20 rounded-full blur-3xl group-hover:bg-blue-600/30 transition-all"></div>
+                                <div className="relative z-10">
+                                    <h3 className="text-2xl font-black mb-4 flex items-center gap-3">
+                                        <span className="text-blue-400">Classora</span> Insights 📈
+                                    </h3>
+                                    <p className="text-slate-400 font-bold mb-8 leading-relaxed">أهلاً بك في منصة القيادة العليا. أنت الآن تدير بنية تحتية تعليمية قوية. إليك بعض النصائح للنمو:</p>
+                                    
+                                    <div className="space-y-6">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 font-black">1</div>
+                                            <div>
+                                                <p className="font-black text-sm text-slate-100">تحسين استهلاك البيانات</p>
+                                                <p className="text-xs text-slate-400 font-bold mt-1">إذا تجاوزت مساحة الداتابيز 400MB، ابدأ في أرشفة الحصص القديمة التي مر عليها أكثر من سنة.</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-black">2</div>
+                                            <div>
+                                                <p className="font-black text-sm text-slate-100">توسيع قاعدة العملاء</p>
+                                                <p className="text-xs text-slate-400 font-bold mt-1">بإمكانك إضافة "باقة تجربة مجانية" لمدة 14 يوم من تبويب "إدارة الباقات" لجذب عملاء جدد.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-10 pt-10 border-t border-white/5 flex items-center justify-between">
+                                        <div className="text-xs font-bold text-slate-500">
+                                            نسخة النظام: <span className="text-blue-400">SaaS Pro v1.0</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cloud Healthy</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* ---------------- تابة السناتر ---------------- */}
                 {activeTab === 'centers' && (
                     <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">

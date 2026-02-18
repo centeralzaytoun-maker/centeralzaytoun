@@ -113,6 +113,7 @@ export default function AdminDashboard() {
     totalDebt: 0,
     collectionRate: 0
   });
+  const [centerData, setCenterData] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [topTeachers, setTopTeachers] = useState([]);
   const [debtorStudents, setDebtorStudents] = useState([]); 
@@ -146,8 +147,20 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (centerId) {
       fetchDashboardData();
+      fetchCenterInfo();
     }
   }, [centerId]);
+
+  async function fetchCenterInfo() {
+    try {
+      const { data, error } = await supabase
+        .from('centers')
+        .select('*, packages(name)')
+        .eq('id', centerId)
+        .single();
+      if (!error) setCenterData(data);
+    } catch (e) { console.error(e); }
+  }
 
   // 🆕 Real-time subscriptions for admin dashboard
   useEffect(() => {
@@ -901,6 +914,33 @@ async function fetchDashboardData() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen text-right relative" dir="rtl">
+      
+      {/* 🎟️ ويدجت حالة الاشتراك (SaaS Status) */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+            <Award size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الباقة الحالية</p>
+            <p className="text-sm font-black text-slate-800">{centerData?.packages?.name || 'تحميل...'}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">تاريخ الانتهاء</p>
+            <p className={`text-sm font-black ${new Date(centerData?.subscription_end_date) < new Date() ? 'text-red-500' : 'text-slate-600'}`}>
+              {centerData?.subscription_end_date ? new Date(centerData.subscription_end_date).toLocaleDateString('ar-EG') : 'مدى الحياة ♾️'}
+            </p>
+          </div>
+          <div className="h-8 w-px bg-slate-100 hidden sm:block"></div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${centerData?.is_active ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <span className="text-xs font-black text-slate-500">{centerData?.is_active ? 'نشط' : 'موقوف'}</span>
+          </div>
+        </div>
+      </div>
       
       {selectedStudentHistory && (
         <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 backdrop-blur-sm transition-all">
