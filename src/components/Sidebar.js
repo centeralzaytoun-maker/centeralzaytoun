@@ -156,7 +156,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
               className={`w-11 h-11 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-sm ${logoUrl ? 'p-0' : 'p-2'}`}
             >
                {logoUrl ? (
-                 <img src={logoUrl} alt={centerName} className="w-full h-full object-contain rounded-xl" />
+                 <img src={logoUrl} alt={centerName} className="w-full h-full object-contain rounded-xl" loading="lazy" />
                ) : (
                  <FaChalkboardTeacher size={24} />
                )}

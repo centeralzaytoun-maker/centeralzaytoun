@@ -8,8 +8,11 @@ import {
   FaClock, FaUsers, FaChalkboardTeacher, 
   FaCheckCircle, FaExclamationCircle, FaSpinner, FaArrowLeft, FaCalendarDay, FaTimesCircle, FaPlus, FaFileAlt, FaCoins
 } from 'react-icons/fa';
-import DailyReportModal from '../../../components/DailyReportModal';
-import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
+import dynamic from 'next/dynamic';
+import { useAuth } from '../../../context/AuthContext';
+
+// 🚀 Dynamic Import for better LCP
+const DailyReportModal = dynamic(() => import('../../../components/DailyReportModal'), { ssr: false });
 
 // ══════════════════════════════════════════════════════════════
 // StaffDashboard — Fully Responsive Premium UI
@@ -422,9 +425,29 @@ export default function StaffDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-blue-600 gap-4">
-        <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-        <p className="font-black text-slate-500 uppercase tracking-widest text-xs">جاري تحميل لوحة التحكم...</p>
+      <div className="p-4 md:p-8 space-y-8 min-h-screen bg-slate-50/50" dir="rtl">
+        {/* Skeleton Header */}
+        <div className="bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 animate-pulse">
+           <div className="h-6 w-32 bg-slate-100 rounded-lg mb-6"></div>
+           <div className="h-12 w-3/4 bg-slate-100 rounded-2xl mb-4"></div>
+           <div className="h-6 w-1/2 bg-slate-100 rounded-lg"></div>
+        </div>
+
+        {/* Skeleton Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+           <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse"></div>
+           <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse"></div>
+           <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse sm:col-span-1 lg:col-span-2"></div>
+        </div>
+
+        {/* Skeleton Timeline */}
+        <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 animate-pulse">
+           <div className="h-8 w-40 bg-slate-100 rounded-lg mb-8"></div>
+           <div className="space-y-6">
+              <div className="h-24 bg-slate-50 rounded-[2rem]"></div>
+              <div className="h-24 bg-slate-50 rounded-[2rem]"></div>
+           </div>
+        </div>
       </div>
     );
   }
@@ -448,10 +471,10 @@ export default function StaffDashboard() {
               منصة سمارت التعليمية
             </div>
             
-            <h1 className="text-3xl md:text-5xl font-black text-slate-800 leading-tight">
+            <h2 className="text-3xl md:text-5xl font-black text-slate-800 leading-tight">
               أهلاً بك، <span className="text-transparent bg-clip-text bg-gradient-to-l from-blue-600 to-indigo-600">{currentUserName.split(' ')[0]}</span> ✨
-            </h1>
-            <p className="text-slate-400 font-bold text-sm md:text-lg max-w-xl mx-auto lg:mr-0 leading-relaxed">
+            </h2>
+            <p className="text-slate-500 font-bold text-sm md:text-lg max-w-xl mx-auto lg:mr-0 leading-relaxed">
               يوم جديد من الإنجاز بانتظارك! دعنا نساعدك في إدارة حصص اليوم بكل سلاسة واحترافية.
             </p>
 
@@ -468,6 +491,7 @@ export default function StaffDashboard() {
               {(allowedFeatures?.includes('finance:reports') || allowedFeatures?.includes('expenses:view')) && (
                 <button 
                   onClick={() => setShowReportModal(true)}
+                  aria-label="عرض تقرير اليوم"
                   className="bg-white text-slate-600 border-2 border-slate-100 px-8 py-4 rounded-2xl font-black hover:bg-slate-50 transition-all flex items-center gap-3 active:scale-95 text-sm md:text-base"
                 >
                   <FaFileAlt className="text-blue-500" />
@@ -478,9 +502,9 @@ export default function StaffDashboard() {
           </div>
 
           {/* Animated Illustration */}
-          <div className="w-full max-w-[280px] md:max-w-[350px] relative animate-in zoom-in slide-in-from-left-8 duration-1000">
+          <div className="w-full max-w-[280px] md:max-w-[350px] relative animate-in zoom-in slide-in-from-left-8 duration-1000 aspect-square">
             <div className="absolute inset-0 bg-blue-400/10 blur-[80px] rounded-full animate-pulse"></div>
-            <svg viewBox="0 0 200 200" className="w-full h-auto drop-shadow-2xl relative z-10 transition-transform duration-1000">
+            <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-2xl relative z-10 transition-transform duration-1000">
                {/* Animated Book/Tablet Shell */}
                <rect x="40" y="40" width="120" height="130" rx="15" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="2" />
                <rect x="50" y="55" width="100" height="85" rx="5" fill="#ffffff" />
@@ -541,7 +565,7 @@ export default function StaffDashboard() {
           <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex flex-col justify-between group hover:border-purple-200 transition-all">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest mb-1">إجمالي الطلاب</p>
+                <p className="text-slate-500 font-black text-[10px] uppercase tracking-widest mb-1">إجمالي الطلاب</p>
                 <h3 className="text-3xl font-black text-slate-800 tracking-tight">{stats.totalStudents}</h3>
               </div>
               <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
@@ -571,6 +595,7 @@ export default function StaffDashboard() {
                   </div>
                   <button 
                     onClick={() => setShowExpenseModal(true)}
+                    aria-label="تسجيل مصروف جديد"
                     className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-xl font-black text-[10px] md:text-xs transition-all flex items-center gap-2 border border-white/10 active:scale-95 shadow-lg"
                   >
                     <FaPlus /> تسجيل مصروف
@@ -579,10 +604,10 @@ export default function StaffDashboard() {
 
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-auto">
                   <div>
-                      <p className="font-black text-emerald-100/80 text-[10px] uppercase tracking-widest mb-1">صافي الخزنة الآن</p>
+                      <p className="font-black text-emerald-50 text-[10px] uppercase tracking-widest mb-1">صافي الخزنة الآن</p>
                       <h3 className="text-3xl md:text-4xl font-black flex items-baseline gap-2">
                         {Math.floor(stats.netCashInDrawer || 0).toLocaleString()} 
-                        <span className="text-sm font-bold opacity-60">ج.م</span>
+                        <span className="text-sm font-bold opacity-75">ج.م</span>
                       </h3>
                   </div>
                   
@@ -607,11 +632,11 @@ export default function StaffDashboard() {
         <div className="flex justify-between items-center mb-10">
           <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-              <FaClock className="text-slate-400 text-sm md:text-base"/>
+              <FaClock className="text-slate-500 text-sm md:text-base"/>
             </div>
             توقيت الحصص
           </h2>
-          <span className="bg-slate-50 text-slate-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-100">
+          <span className="bg-slate-50 text-slate-500 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-100">
              {todaysSchedule.length} موعد مُدرج
           </span>
         </div>
@@ -619,10 +644,10 @@ export default function StaffDashboard() {
         {todaysSchedule.length === 0 ? (
           <div className="text-center py-20 flex flex-col items-center animate-in fade-in duration-1000">
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-              <FaExclamationCircle className="text-5xl text-slate-200" />
+              <FaExclamationCircle className="text-5xl text-slate-300" />
             </div>
-            <h3 className="text-slate-400 font-black text-xl">لا توجد حصص مجدولة</h3>
-            <p className="text-slate-300 text-xs font-bold mt-2">يبدو أن هذا اليوم خالي من المواعيد المسبقة</p>
+            <h3 className="text-slate-500 font-black text-xl">لا توجد حصص مجدولة</h3>
+            <p className="text-slate-400 text-xs font-bold mt-2">يبدو أن هذا اليوم خالي من المواعيد المسبقة</p>
           </div>
         ) : (
           <div className="space-y-4 md:space-y-6">
@@ -641,8 +666,8 @@ export default function StaffDashboard() {
                       <FaTimesCircle size={24} />
                     </div>
                     <div className="flex-1 text-center md:text-right">
-                      <h3 className="font-black text-slate-500 line-through text-base md:text-lg">{item.groups?.courses?.name || 'حصة عامة'}</h3>
-                      <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">حالة الحصة: تم الإلغاء لليوم</p>
+                      <h3 className="font-black text-slate-600 line-through text-base md:text-lg">{item.groups?.courses?.name || 'حصة عامة'}</h3>
+                      <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">حالة الحصة: تم الإلغاء لليوم</p>
                     </div>
                   </div>
                 );
@@ -685,7 +710,7 @@ export default function StaffDashboard() {
                       <span className="block text-2xl md:text-3xl font-black text-slate-800 tracking-tighter" dir="ltr">
                         {formatTime(item.start_time)}
                       </span>
-                      <span className="text-[10px] md:text-xs font-black text-slate-300 uppercase tracking-widest block mt-1">
+                      <span className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest block mt-1">
                         بانتظار {formatTime(item.end_time)}
                       </span>
                     </div>
@@ -716,16 +741,16 @@ export default function StaffDashboard() {
                       )}
                     </div>
 
-                    <div className="flex-wrap items-center gap-x-6 gap-y-2 text-xs md:text-sm font-black text-slate-400 flex">
+                    <div className="flex-wrap items-center gap-x-6 gap-y-2 text-xs md:text-sm font-black text-slate-500 flex">
                       <div className="flex items-center gap-2">
-                        <FaChalkboardTeacher className="text-blue-400"/> 
+                        <FaChalkboardTeacher className="text-blue-500"/> 
                         {item.groups?.courses?.instructors?.name || item.groups?.courses?.instructor || item.exams?.instructors?.name || 'مدرس لم يحدد'}
                       </div>
                       <div className="flex items-center gap-2">
-                        <FaUsers className="text-purple-400"/> 
+                        <FaUsers className="text-purple-500"/> 
                         {item.groups?.name || 'مجموعة عامة'}
                       </div>
-                      <div className="bg-slate-50 text-slate-500 px-3 py-1 rounded-xl text-[10px] font-black border border-slate-100">{item.rooms?.name || 'قاعة غير محددة'}</div>
+                      <div className="bg-slate-50 text-slate-600 px-3 py-1 rounded-xl text-[10px] font-black border border-slate-100">{item.rooms?.name || 'قاعة غير محددة'}</div>
                     </div>
 
                     {/* Progress Track */}
@@ -803,7 +828,13 @@ export default function StaffDashboard() {
                   </div>
                   تسجيل مصروف
                 </h3>
-                <button onClick={() => setShowExpenseModal(false)} className="text-slate-300 hover:text-slate-600"><FaTimesCircle size={24} /></button>
+                <button 
+                  onClick={() => setShowExpenseModal(false)} 
+                  aria-label="إغلاق التنبيه"
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <FaTimesCircle size={24} />
+                </button>
              </div>
             
             <form onSubmit={handleAddExpense} className="space-y-6">
@@ -850,16 +881,18 @@ export default function StaffDashboard() {
         </div>
       )}
 
-      <DailyReportModal 
-        isOpen={showReportModal} 
-        onClose={() => setShowReportModal(false)}
-        stats={stats}
-        expenses={expensesList} 
-        sessions={todaysSchedule}
-        currentUser={currentUserName || 'Admin'} 
-        centerName={centerSettings?.center_name}
-        logoUrl={centerSettings?.logo_url}
-      />
+      {showReportModal && (
+        <DailyReportModal 
+          isOpen={showReportModal} 
+          onClose={() => setShowReportModal(false)}
+          stats={stats}
+          expenses={expensesList} 
+          sessions={todaysSchedule}
+          currentUser={currentUserName || 'Admin'} 
+          centerName={centerSettings?.center_name}
+          logoUrl={centerSettings?.logo_url}
+        />
+      )}
     </div>
   );
 }
