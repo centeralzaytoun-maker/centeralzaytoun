@@ -305,7 +305,7 @@ export const useAttendance = (activeSession, students, courses, groups, centerCo
             });
 
             await supabase.from('student_activities').insert([{
-              student_id: student.unique_id,
+              student_id: student.id, // ← Use student.id (UUID)
               type: 'note',
               title: 'إلغاء تسجيل حضور',
               description: `تم إلغاء حضور الطالب في حصة: ${activeSession.topic} وإرجاع المبلغ للمحفظة.`,
@@ -328,7 +328,7 @@ export const useAttendance = (activeSession, students, courses, groups, centerCo
         }
       } else {
         await supabase.from('student_activities').insert([{
-          student_id: student.unique_id,
+          student_id: student.id, // ← Use student.id (UUID)
           type: 'note',
           title: 'إلغاء تسجيل حضور',
           description: `تم إلغاء حضور الطالب في حصة: ${activeSession.topic}`,

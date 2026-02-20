@@ -118,16 +118,17 @@ export default function SubscriptionsPage() {
       
       // جلب آخر حصة حضور لكل طالب لبيان المنقطعين
       if (studentsData?.length > 0) {
-        const { data: sessionData } = await supabaseBrowser
-          .from('sessions')
-          .select('student_id, date')
+        const { data: activityData } = await supabaseBrowser
+          .from('student_activities')
+          .select('student_id, created_at')
+          .eq('type', 'attendance')
           .in('student_id', studentsData.map(s => s.id))
-          .order('date', { ascending: false });
+          .order('created_at', { ascending: false });
         
         const lastSessionMap = {};
-        sessionData?.forEach(s => {
+        activityData?.forEach(s => {
           if (!lastSessionMap[s.student_id]) {
-            lastSessionMap[s.student_id] = s.date;
+            lastSessionMap[s.student_id] = s.created_at;
           }
         });
         setLastSessions(lastSessionMap);

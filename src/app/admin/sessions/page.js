@@ -568,7 +568,7 @@ export default function SessionsPage() {
 
       const { data: groupStudents } = await supabaseBrowser
         .from('students')
-        .select('unique_id')
+        .select('id, unique_id')
         .eq(`group_ids->>${activeSession.course_id}`, activeSession.group_id)
         .eq('center_id', centerId);
 
@@ -577,7 +577,7 @@ export default function SessionsPage() {
         const actualTimeStr = new Date(now).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
         
         const activities = safeGroupStudents.map(s => ({
-          student_id: s.unique_id,
+          student_id: s.id, // ← Use UUID (id) instead of unique_id
           type: 'attendance',
           title: 'بدأ الشرح الفعلي ✍️',
           description: `بدأ الآن مستر ${teacherName} شرح حصة ${activeSession.topic}.`,
