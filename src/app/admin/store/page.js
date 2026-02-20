@@ -3503,7 +3503,7 @@ const filteredSettlementPackages = useMemo(() => {
                                             <tr key={idx} className="hover:bg-orange-50/10 transition-colors group">
                                                 <td className="p-5 font-black text-slate-700">{refund.store_products?.name}</td>
                                                 <td className="p-5 text-center">
-                                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                                                    <span className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${
                                                         (refund.store_products?.type?.toLowerCase() === 'note') ? 'bg-blue-50 text-blue-600 border border-blue-100' :
                                                         (refund.store_products?.type?.toLowerCase() === 'book') ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                                         (refund.store_products?.type?.toLowerCase() === 'code') ? 'bg-purple-50 text-purple-600 border border-purple-100' :
@@ -3525,7 +3525,7 @@ const filteredSettlementPackages = useMemo(() => {
                                                 </td>
                                                 <td className="p-5 text-center text-xs text-slate-400 max-w-[150px] truncate" title={refund.reason}>{refund.reason || '—'}</td>
                                                 <td className="p-5 text-center">
-                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${
+                                                    <span className={`inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight whitespace-nowrap ${
                                                         refund.refund_method === 'center_account' ? 'bg-purple-100 text-purple-600' :
                                                         refund.refund_method === 'cash' ? 'bg-emerald-100 text-emerald-600' :
                                                         'bg-blue-100 text-blue-600'
@@ -3536,7 +3536,7 @@ const filteredSettlementPackages = useMemo(() => {
                                                 </td>
                                                 <td className="p-5 text-center text-[10px] font-black text-slate-400 uppercase">{refund.admin_name || 'System'}</td>
                                                 <td className="p-5 font-black text-orange-600 text-left pl-8 text-lg">
-                                                    {refund.amount}
+                                                    {refund.refund_amount}
                                                     <span className="text-[10px] opacity-40 mr-1">ج.م</span>
                                                 </td>
                                             </tr>
