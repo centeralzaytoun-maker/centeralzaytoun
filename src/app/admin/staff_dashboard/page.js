@@ -146,6 +146,7 @@ export default function StaffDashboard() {
     try {
       setLoading(true);
       
+      // 1. جلب الجلسة أولاً لأنها ضرورية لبيانات المستخدم
       const { data: { session }, error: authError } = await supabase.auth.getSession();
       if (authError || !session) {
         console.error("❌ Auth Error:", authError);
@@ -164,79 +165,76 @@ export default function StaffDashboard() {
       const todayDate = new Date().toISOString().split('T')[0];
       const todayIndex = new Date().getDay(); // 0 = الأحد
 
-      // 🛠️ التعديل هنا: نقلنا الكورس جوه الجروب
-      const { data: scheduleData, error } = await supabase
-        .from('schedule')
-        .select(`
-          *,
-          groups (
-            id, 
-            name,
-            courses (id, name, instructor, instructor_id, instructors(id, name), grade)
-          ),
-          rooms (name),
-          exams (*)
-        `)
-        .eq('center_id', centerId)
-        .eq('day_of_week', todayIndex)
-        .order('start_time', { ascending: true });
+      // 🚀 2. التحميل المتوازي لكل بيانات الداشبورد لتقليل LCP
+      const [scheduleRes, sessionsRes, studentsRes, expensesRes, settingsRes] = await Promise.all([
+        supabase
+          .from('schedule')
+          .select(`*, groups (id, name, courses (id, name, instructor, instructor_id, instructors(id, name), grade)), rooms (name), exams (*)`)
+          .eq('center_id', centerId).eq('day_of_week', todayIndex).order('start_time', { ascending: true }),
+        
+        supabase
+          .from('sessions')
+          .select('group_id, topic, payments, fixed_share, actual_start_time, is_completed, status')
+          .eq('center_id', centerId).gte('created_at', `${todayDate}T00:00:00`).lte('created_at', `${todayDate}T23:59:59`),
+        
+        supabase
+          .from('students')
+          .select('*', { count: 'exact', head: true }).eq('center_id', centerId),
+        
+        supabase
+          .from('expenses')
+          .select('title, amount, created_by, staff_name, created_at, is_admin')
+          .eq('center_id', centerId).eq('expense_date', todayDate).eq('is_admin', false),
+          
+        supabase
+          .from('center_settings')
+          .select('center_name, logo_url')
+          .eq('center_id', centerId).maybeSingle()
+      ]);
 
-      if (error) throw error;
+      // استخراج البيانات بعد انتهاء الطلبات المتوازية
+      const scheduleData = scheduleRes.data || [];
+      const sessionsData = sessionsRes.data || [];
+      const studentsCount = studentsRes.count || 0;
+      const expensesData = expensesRes.data || [];
+      const settingsData = settingsRes.data;
 
-      const { data: sessionsData } = await supabase
-        .from('sessions')
-        .select('group_id, topic, payments, fixed_share, actual_start_time, is_completed, status')
-        .eq('center_id', centerId)
-        .gte('created_at', `${todayDate}T00:00:00`)
-        .lte('created_at', `${todayDate}T23:59:59`);
+      // تحديث إعدادات السنتر فوراً
+      if (settingsData) setCenterSettings(settingsData);
 
-      const { count: studentsCount } = await supabase
-        .from('students')
-        .select('*', { count: 'exact', head: true })
-        .eq('center_id', centerId);
-
+      // معالجة بيانات الحصص
       const activeIds = [];
       const cancelledIds = [];
-      const activeSessionsMap = {};
+      const activeSessionsMapData = {};
 
-      sessionsData?.forEach(s => {
+      sessionsData.forEach(s => {
         if (s.status === 'cancelled' || (s.topic && s.topic.includes('ملغاة'))) {
           cancelledIds.push(s.group_id);
         } else {
           activeIds.push(s.group_id);
-          activeSessionsMap[s.group_id] = s;
+          activeSessionsMapData[s.group_id] = s;
         }
       });
 
-      const scheduleList = scheduleData || [];
-      const openedSessionGroupIds = activeIds || [];
-      const todayScheduleGroupIds = scheduleList.map(item => item.group_id);
-      const todaySessions = sessionsData?.filter(s => todayScheduleGroupIds.includes(s.group_id)) || [];
+      const todayScheduleGroupIds = scheduleData.map(item => item.group_id);
+      const todaySessions = sessionsData.filter(s => todayScheduleGroupIds.includes(s.group_id));
       const cancelledTodaySessions = todaySessions.filter(s => s.status === 'cancelled' || s.topic?.includes('ملغاة')).map(s => s.group_id);
-      const cancelledScheduleIds = scheduleList.filter(item => cancelledTodaySessions.includes(item.group_id)).map(item => item.group_id);
+      const cancelledScheduleIds = scheduleData.filter(item => cancelledTodaySessions.includes(item.group_id)).map(item => item.group_id);
 
       const netProfit = calculateCenterNetProfit(sessionsData);
-
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('title, amount, created_by, staff_name, created_at, is_admin')
-        .eq('center_id', centerId)
-        .eq('expense_date', todayDate)
-        .eq('is_admin', false); // 🛡️ فلترة: استبعاد مصاريف الإدارة
-
-      const totalDailyExpenses = expensesData?.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) || 0;
+      const totalDailyExpenses = expensesData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       
       setTodayExpenses(totalDailyExpenses);
-      setExpensesList(expensesData || []);
-      setTodaysSchedule(scheduleList);
+      setExpensesList(expensesData);
+      setTodaysSchedule(scheduleData);
       setActiveSessions(activeIds);
       setCancelledSessions(cancelledScheduleIds);
-      setActiveSessionsMap(activeSessionsMap);
+      setActiveSessionsMap(activeSessionsMapData);
       
       setStats({
-        totalStudents: studentsCount || 0,
-        todaySessions: scheduleList.length,
-        openSessions: openedSessionGroupIds.length,
+        totalStudents: studentsCount,
+        todaySessions: scheduleData.length,
+        openSessions: activeIds.length,
         revenue: netProfit,
         netCashInDrawer: netProfit - totalDailyExpenses
       });
@@ -244,9 +242,11 @@ export default function StaffDashboard() {
     } catch (error) {
       console.error('Error fetching dashboard:', error);
     } finally {
+      // ✅ بمجرد انتهاء التحميل، سيظهر الـ Hero Banner فوراً
       setLoading(false);
     }
   };
+
 
   const formatTime = (time) => {
     if (!time) return '';
