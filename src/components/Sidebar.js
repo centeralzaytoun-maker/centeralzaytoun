@@ -140,7 +140,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
       )}
 
       <aside 
-        className={`bg-white h-screen border-l flex flex-col z-[65] shadow-2xl md:shadow-sm transition-[width,transform] duration-300 ease-in-out
+        className={`bg-white h-screen border-l flex flex-col z-[65] shadow-2xl md:shadow-sm transition-all duration-300 ease-in-out
         fixed inset-y-0 right-0 md:sticky md:top-0 md:translate-x-0
         ${isMobileOpen ? 'translate-x-0 w-72 p-6' : 'translate-x-full md:translate-x-0 p-4'}
         ${isOpen ? 'md:w-72' : 'md:w-24'} 
@@ -194,13 +194,18 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
                   key={item.id}
                   href={item.href} 
                   title={(!isOpen && !isMobileOpen) ? item.label : ''} 
-                  className={`flex items-center gap-3 px-3 py-4 md:py-3.5 rounded-xl transition-all duration-150 group relative active:scale-95
+                  style={isActive ? { 
+                    backgroundColor: primaryColor, 
+                    boxShadow: `0 10px 15px -3px ${primaryColor}44` 
+                  } : {}}
+                  className={`flex items-center gap-3 px-3 py-4 md:py-3.5 rounded-xl transition-all duration-200 group relative
                     ${isActive 
                       ? 'text-white' 
-                      : 'text-gray-500 hover:bg-gray-50'}
+                      : 'text-gray-500'}
                     ${(!isOpen && !isMobileOpen) ? 'md:justify-center' : ''} 
                   `}
-                  // Removed JS hover for better performance
+                  onMouseEnter={(e) => !isActive && (e.currentTarget.style.backgroundColor = `${primaryColor}11`)}
+                  onMouseLeave={(e) => !isActive && (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
                   <span 
                     className={`text-xl transition-colors`}
@@ -239,8 +244,8 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
                         key={item.id}
                         href={item.href} 
                         title={(!isOpen && !isMobileOpen) ? item.label : ''} 
-                        className={`flex items-center gap-3 px-3 py-4 md:py-3.5 rounded-xl transition-all duration-200 group relative animate-in fade-in slide-in-from-right-4 active:scale-95
-                          ${isActive ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}
+                        className={`flex items-center gap-3 px-3 py-4 md:py-3.5 rounded-xl transition-all duration-200 group relative animate-in fade-in slide-in-from-right-4
+                          ${isActive ? 'text-white' : 'text-gray-500'}
                           ${(!isOpen && !isMobileOpen) ? 'md:justify-center' : ''} 
                         `}
                         style={{ 
@@ -250,7 +255,8 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
                           } : {}), 
                           animationDelay: `${(index + 1) * 70}ms` 
                         }}
-                        // Removed JS hover
+                        onMouseEnter={(e) => !isActive && (e.currentTarget.style.backgroundColor = `${primaryColor}11`)}
+                        onMouseLeave={(e) => !isActive && (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
                         <span 
                           className={`text-xl transition-transform duration-300 group-hover:scale-110`}
