@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 
 
@@ -29,16 +30,10 @@ let supabaseInstance;
 if (typeof window !== 'undefined') {
   // في المتصفح: بنحاول نسترجع النسخة الموجودة لو موجودة
   if (!supabaseInstance) {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      }
-    });
+    supabaseInstance = createBrowserClient(supabaseUrl, supabaseAnonKey);
   }
 } else {
-  // في السيرفر: بننشئ نسخة جديدة لكل طلب (ده الطبيعي في الـ SSR)
+  // في السيرفر: بننشئ نسخة جديدة لكل طلب
   supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: false,
