@@ -19,9 +19,16 @@ const DailyReportModal = dynamic(() => import('../../../components/DailyReportMo
 // ══════════════════════════════════════════════════════════════
 export default function StaffDashboard() {
   const router = useRouter();
-  const { centerId, allowedFeatures } = useAuth(); // ← استخراج centerId و allowedFeatures من الـ context
+  const { centerId, allowedFeatures, user } = useAuth(); // ← استخراج centerId و allowedFeatures و user
   
   // التحقق من وجود centerId قبل تشغيل أي دوال
+  useEffect(() => {
+    if (user) {
+      const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0];
+      if (name) setCurrentUserName(name);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!centerId) {
       console.log('❌ No centerId found - waiting for authentication...');
@@ -423,35 +430,6 @@ export default function StaffDashboard() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="p-4 md:p-8 space-y-8 min-h-screen bg-slate-50/50" dir="rtl">
-        {/* Skeleton Header */}
-        <div className="bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 animate-pulse">
-           <div className="h-6 w-32 bg-slate-100 rounded-lg mb-6"></div>
-           <div className="h-12 w-3/4 bg-slate-100 rounded-2xl mb-4"></div>
-           <div className="h-6 w-1/2 bg-slate-100 rounded-lg"></div>
-        </div>
-
-        {/* Skeleton Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-           <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse"></div>
-           <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse"></div>
-           <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse sm:col-span-1 lg:col-span-2"></div>
-        </div>
-
-        {/* Skeleton Timeline */}
-        <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 animate-pulse">
-           <div className="h-8 w-40 bg-slate-100 rounded-lg mb-8"></div>
-           <div className="space-y-6">
-              <div className="h-24 bg-slate-50 rounded-[2rem]"></div>
-              <div className="h-24 bg-slate-50 rounded-[2rem]"></div>
-           </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-10 animate-in fade-in duration-700 min-h-screen bg-slate-50/50 pb-24 md:pb-12" dir="rtl">
       
@@ -561,7 +539,9 @@ export default function StaffDashboard() {
         )}
 
         {/* كارت الطلاب (Students Card) */}
-        {allowedFeatures?.includes('students:view') && (
+        {loading ? (
+             <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse"></div>
+        ) : allowedFeatures?.includes('students:view') && (
           <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex flex-col justify-between group hover:border-purple-200 transition-all">
             <div className="flex justify-between items-start">
               <div>
@@ -585,7 +565,9 @@ export default function StaffDashboard() {
         )}
 
         {/* كارت صافي الخزنة */}
-        {(allowedFeatures?.includes('expenses:view') || allowedFeatures?.includes('finance:reports')) && (
+        {loading ? (
+            <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse sm:col-span-1 lg:col-span-2"></div>
+        ) : (allowedFeatures?.includes('expenses:view') || allowedFeatures?.includes('finance:reports')) && (
           <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-[2rem] p-6 shadow-xl shadow-emerald-100 relative overflow-hidden group sm:col-span-1 lg:col-span-2">
             <div className="absolute right-0 bottom-0 w-48 h-48 bg-white/5 rounded-full translate-x-10 translate-y-10 group-hover:scale-110 transition-transform duration-700"></div>
             <div className="relative z-10 h-full flex flex-col">
@@ -640,8 +622,12 @@ export default function StaffDashboard() {
              {todaysSchedule.length} موعد مُدرج
           </span>
         </div>
-
-        {todaysSchedule.length === 0 ? (
+{loading ? (
+    <div className="space-y-6">
+        <div className="h-24 bg-slate-50 rounded-[2rem] animate-pulse"></div>
+        <div className="h-24 bg-slate-50 rounded-[2rem] animate-pulse"></div>
+    </div>
+) : todaysSchedule.length === 0 ? (
           <div className="text-center py-20 flex flex-col items-center animate-in fade-in duration-1000">
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
               <FaExclamationCircle className="text-5xl text-slate-300" />
