@@ -50,24 +50,31 @@ export default function DebtsPage() {
   const [selectedInstructor, setSelectedInstructor] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
 
-  // 1. جلب البيانات من السيرفر عند تحميل الصفحة
+  // 1. جلب البيانات من السيرفر عند تحميل الصفحة بشكل متوازي
   useEffect(() => {
     if (!centerId) return;
     
     async function fetchData() {
-      const { data: sess } = await supabaseBrowser.from('sessions').select('*').eq('center_id', centerId).order('created_at', { ascending: false });
-      const { data: stud } = await supabaseBrowser.from('students').select('*').eq('center_id', centerId);
-      const { data: cour } = await supabaseBrowser.from('courses').select('id, name, instructor, instructors(id, name), grade').eq('center_id', centerId);
-      const { data: subs } = await supabaseBrowser.from('student_subscriptions').select('*').eq('center_id', centerId);
-      
-      setSessions(sess || []);
-      setStudents(stud || []);
-      setCourses(cour || []);
-      setSubscriptions(subs || []);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const [sessRes, studRes, courRes, subsRes, configRes] = await Promise.all([
+          supabaseBrowser.from('sessions').select('*').eq('center_id', centerId).order('created_at', { ascending: false }),
+          supabaseBrowser.from('students').select('*').eq('center_id', centerId),
+          supabaseBrowser.from('courses').select('id, name, instructor, instructors(id, name), grade').eq('center_id', centerId),
+          supabaseBrowser.from('student_subscriptions').select('*').eq('center_id', centerId),
+          supabaseBrowser.from('center_settings').select('*').eq('center_id', centerId).maybeSingle()
+        ]);
 
-      const { data: config } = await supabaseBrowser.from('center_settings').select('*').eq('center_id', centerId).maybeSingle();
-        setCenterConfig(config);
+        setSessions(sessRes.data || []);
+        setStudents(studRes.data || []);
+        setCourses(courRes.data || []);
+        setSubscriptions(subsRes.data || []);
+        setCenterConfig(configRes.data);
+      } catch (err) {
+        console.error("Fetch Error:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     
     fetchData();
@@ -223,14 +230,7 @@ export default function DebtsPage() {
     setSelectedInstructor('');
     setSelectedStatus('');
   };
-  // --- شرط التحميل (يجب أن يكون هنا بالضبط قبل الـ return الأساسي) ---
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-xl font-bold text-gray-400">
-        جاري تحميل سجل المديونيات...
-      </div>
-    );
-  }
+
 
   // التحقق من وجود centerId قبل عرض المحتوى
   if (!centerId) {
@@ -259,7 +259,11 @@ export default function DebtsPage() {
         </div>
         <div className="bg-red-600 text-white px-6 py-3 md:py-2 rounded-2xl shadow-lg text-center w-full md:w-auto">
           <p className="text-[9px] md:text-[10px] opacity-80 uppercase font-bold tracking-wider">إجمالي المديونيات</p>
-          <p className="text-xl md:text-2xl font-black">{allDebts.reduce((s, d) => s + d.amount, 0).toFixed(2)} <span className="text-xs md:text-sm font-medium opacity-70">ج.م</span></p>
+          {loading ? (
+             <div className="h-8 w-24 bg-white/20 animate-pulse rounded mx-auto mt-1"></div>
+          ) : (
+            <p className="text-xl md:text-2xl font-black">{allDebts.reduce((s, d) => s + d.amount, 0).toFixed(2)} <span className="text-xs md:text-sm font-medium opacity-70">ج.م</span></p>
+          )}
         </div>
       </div>
 
@@ -391,77 +395,90 @@ export default function DebtsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {allDebts
-                .filter(d => {
-                  const search = searchTerm.toLowerCase();
-                  const mSearch = d.studentName?.toLowerCase().includes(search);
-                  const mGrade = !selectedGrade || d.grade === selectedGrade;
-                  const mCourse = !selectedCourse || d.courseName === selectedCourse;
-                  const mInstructor = !selectedInstructor || d.instructor === selectedInstructor;
-                  const mStatus = !selectedStatus || 
-                    (selectedStatus === 'monthly_expired' ? (d.isMonthlyCourse && !d.isPaidMonthly) : d.status === selectedStatus);
-                  return mSearch && mGrade && mCourse && mInstructor && mStatus;
-                })
-                .map(debt => (
-                  <tr key={debt.id} className="hover:bg-red-50/50 transition-colors">
-                    <td className="p-4 md:p-5 font-bold text-gray-800 whitespace-nowrap">{debt.studentName}</td>
-                    <td className="p-4 md:p-5 text-center">
-                      <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black border border-blue-200 whitespace-nowrap">
-                        {debt.grade}
-                      </span>
-                    </td>
-                    <td className="p-4 md:p-5 text-center whitespace-nowrap">
-                      <p className="font-bold text-xs md:text-sm">{debt.courseName}</p>
-                      <div className="flex flex-col items-center gap-1 mt-1">
-                        <p className="text-[9px] md:text-[10px] text-gray-400">م/ {debt.instructor}</p>
-                        
-                        {debt.isMonthlyCourse && !debt.isPaidMonthly && (
-                          <span className="px-2 py-0.5 bg-red-50 text-red-600 text-[8px] font-bold rounded border border-red-100">شهري غير مدفوع 📅</span>
-                        )}
-                        {debt.status === 'centerOnly' && (
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-bold rounded border border-blue-100">سنتر فقط 🏢</span>
-                        )}
-                        {debt.status === 'discount' && (
-                          <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[8px] font-bold rounded border border-amber-100">خصم خاص 📉</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 md:p-5 text-center font-black text-red-600 text-lg md:text-xl whitespace-nowrap">{debt.amount.toFixed(2)}</td>
-                    <td className="p-4 text-gray-500 font-mono text-xs md:text-sm whitespace-nowrap">
-                      {new Date(debt.date).toLocaleDateString('ar-EG', {
-                        year: 'numeric', month: 'short', day: 'numeric'
-                      })}
-                    </td>
-                    <td className="p-4 md:p-5 text-center">
-                      <div className="flex justify-center gap-2">
-                        <button onClick={() => handleSettleDebt(debt)} className="bg-green-600 hover:bg-green-700 text-white px-4 h-9 rounded-xl font-bold text-[10px] md:text-xs shadow transition active:scale-95 whitespace-nowrap">تسديد</button>
-                        <button 
-                          onClick={() => {
-                            // 1. تنظيف وتجهيز رقم التليفون
-                            let phone = debt.studentPhone.replace(/\D/g, ''); 
-                            if (phone.startsWith('01')) phone = '2' + phone;
-
-                            // 2. جلب القالب المخصص من الإعدادات أو استخدام قالب افتراضي
-                            let template = centerConfig?.msg_debt || "تذكير مالي: الطالب [name] متبقي عليه مبلغ [amount] ج.م من حصة [topic]";
-
-                            // 3. عملية الاستبدال الذكية للبيانات
-                            const finalMsg = template
-                              .replace(/\[name\]/g, debt.studentName)
-                              .replace(/\[amount\]/g, debt.amount.toFixed(2))
-                              .replace(/\[topic\]/g, debt.courseName);
-
-                            // 4. فتح الرابط
-                            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(finalMsg)}`, '_blank');
-                          }} 
-                          className="bg-green-100 text-green-600 w-9 h-9 flex items-center justify-center rounded-xl hover:bg-green-200 transition shadow-sm active:scale-95 shrink-0"
-                          title="إرسال رسالة واتساب"
-                        >
-                          <FaWhatsapp className="text-lg" />
-                        </button>
-                      </div>
-                    </td>
+              {loading ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-2/3"></div></td>
+                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
+                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
+                    <td className="p-5"><div className="h-6 bg-red-50 rounded w-1/3 mx-auto"></div></td>
+                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
+                    <td className="p-5"><div className="h-8 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
                   </tr>
-                ))}
+                ))
+              ) : (
+                allDebts
+                  .filter(d => {
+                    const search = searchTerm.toLowerCase();
+                    const mSearch = d.studentName?.toLowerCase().includes(search);
+                    const mGrade = !selectedGrade || d.grade === selectedGrade;
+                    const mCourse = !selectedCourse || d.courseName === selectedCourse;
+                    const mInstructor = !selectedInstructor || d.instructor === selectedInstructor;
+                    const mStatus = !selectedStatus || 
+                      (selectedStatus === 'monthly_expired' ? (d.isMonthlyCourse && !d.isPaidMonthly) : d.status === selectedStatus);
+                    return mSearch && mGrade && mCourse && mInstructor && mStatus;
+                  })
+                  .map(debt => (
+                    <tr key={debt.id} className="hover:bg-red-50/50 transition-colors">
+                      <td className="p-4 md:p-5 font-bold text-gray-800 whitespace-nowrap">{debt.studentName}</td>
+                      <td className="p-4 md:p-5 text-center">
+                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black border border-blue-200 whitespace-nowrap">
+                          {debt.grade}
+                        </span>
+                      </td>
+                      <td className="p-4 md:p-5 text-center whitespace-nowrap">
+                        <p className="font-bold text-xs md:text-sm">{debt.courseName}</p>
+                        <div className="flex flex-col items-center gap-1 mt-1">
+                          <p className="text-[9px] md:text-[10px] text-gray-400">م/ {debt.instructor}</p>
+                          
+                          {debt.isMonthlyCourse && !debt.isPaidMonthly && (
+                            <span className="px-2 py-0.5 bg-red-50 text-red-600 text-[8px] font-bold rounded border border-red-100">شهري غير مدفوع 📅</span>
+                          )}
+                          {debt.status === 'centerOnly' && (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-bold rounded border border-blue-100">سنتر فقط 🏢</span>
+                          )}
+                          {debt.status === 'discount' && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[8px] font-bold rounded border border-amber-100">خصم خاص 📉</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 md:p-5 text-center font-black text-red-600 text-lg md:text-xl whitespace-nowrap">{debt.amount.toFixed(2)}</td>
+                      <td className="p-4 text-gray-500 font-mono text-xs md:text-sm whitespace-nowrap">
+                        {new Date(debt.date).toLocaleDateString('ar-EG', {
+                          year: 'numeric', month: 'short', day: 'numeric'
+                        })}
+                      </td>
+                      <td className="p-4 md:p-5 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button onClick={() => handleSettleDebt(debt)} className="bg-green-600 hover:bg-green-700 text-white px-4 h-9 rounded-xl font-bold text-[10px] md:text-xs shadow transition active:scale-95 whitespace-nowrap">تسديد</button>
+                          <button 
+                            onClick={() => {
+                              // 1. تنظيف وتجهيز رقم التليفون
+                              let phone = debt.studentPhone.replace(/\D/g, ''); 
+                              if (phone.startsWith('01')) phone = '2' + phone;
+
+                              // 2. جلب القالب المخصص من الإعدادات أو استخدام قالب افتراضي
+                              let template = centerConfig?.msg_debt || "تذكير مالي: الطالب [name] متبقي عليه مبلغ [amount] ج.م من حصة [topic]";
+
+                              // 3. عملية الاستبدال الذكية للبيانات
+                              const finalMsg = template
+                                .replace(/\[name\]/g, debt.studentName)
+                                .replace(/\[amount\]/g, debt.amount.toFixed(2))
+                                .replace(/\[topic\]/g, debt.courseName);
+
+                              // 4. فتح الرابط
+                              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(finalMsg)}`, '_blank');
+                            }} 
+                            className="bg-green-100 text-green-600 w-9 h-9 flex items-center justify-center rounded-xl hover:bg-green-200 transition shadow-sm active:scale-95 shrink-0"
+                            title="إرسال رسالة واتساب"
+                          >
+                            <FaWhatsapp className="text-lg" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+              )}
             </tbody>
           </table>
         </div>
