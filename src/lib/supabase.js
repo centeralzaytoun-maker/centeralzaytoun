@@ -23,39 +23,40 @@ if (typeof window === 'undefined' && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 
 
-// 2. الكلاينت الأساسي الآمن
+// 2. الكلاينت الأساسي الآمن (Singleton Pattern)
+let supabaseInstance;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-
-  auth: {
-
-    persistSession: true,
-
-    autoRefreshToken: true,
-
-    detectSessionInUrl: true,
-
+if (typeof window !== 'undefined') {
+  // في المتصفح: بنحاول نسترجع النسخة الموجودة لو موجودة
+  if (!supabaseInstance) {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      }
+    });
   }
+} else {
+  // في السيرفر: بننشئ نسخة جديدة لكل طلب (ده الطبيعي في الـ SSR)
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+    }
+  });
+}
 
-});
-
-
+export const supabase = supabaseInstance;
 
 // 3. الكلاينت الآدمن للعمليات الحساسة (فقط إذا كان المفتاح متوفر)
-
-export const supabaseAdmin = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey, {
-
-  auth: {
-
-    persistSession: false,
-
-    autoRefreshToken: false,
-
-  }
-
-}) : null;
-
-
+export const supabaseAdmin = (typeof window === 'undefined' && supabaseServiceKey) 
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      }
+    }) 
+  : null;
 
 // 👇 4. الحل السحري: بنصدر نفس الكلاينت بس بالاسم القديم
 
