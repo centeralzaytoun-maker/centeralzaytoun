@@ -36,15 +36,48 @@ export const useExpenses = (initialMonth) => {
     setLoading(false);
   }, [selectedMonth, centerId]);
 
-  // 2. 🆕 Fetch Live Balance Logic (من دالة SQL)
+  // 2. 🆕 Fetch Live Balance Logic (حساب يدوي آمن لكل سنتر)
   const fetchBalance = useCallback(async () => {
-    const { data, error } = await supabase.rpc('get_financial_summary');
-    if (!error && data) {
-        setBalanceInfo(data);
-    } else if (error) {
-        console.error('Error fetching balance:', error);
+    if (!centerId) return;
+    
+    try {
+        // حساب إيرادات الحصص (من جدول الحضور)
+        const { data: attData } = await supabase
+            .from('attendance')
+            .select('amount_paid')
+            .eq('center_id', centerId);
+        
+        const sessions_net = attData?.reduce((acc, curr) => acc + (Number(curr.amount_paid) || 0), 0) || 0;
+
+        // حساب إيرادات المتجر (من جدول مبيعات المتجر)
+        const { data: storeData } = await supabase
+            .from('store_sales')
+            .select('total_price')
+            .eq('center_id', centerId);
+        
+        const store_net = storeData?.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0) || 0;
+
+        // حساب إجمالي المصروفات "منذ البداية" لهذا السنتر
+        const { data: expData } = await supabase
+            .from('expenses')
+            .select('amount')
+            .eq('center_id', centerId);
+        
+        const expenses_total = expData?.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0) || 0;
+
+        const income_total = sessions_net + store_net;
+
+        setBalanceInfo({
+            income: income_total,
+            expenses: expenses_total,
+            balance: income_total - expenses_total,
+            sessions_net: sessions_net,
+            store_net: store_net
+        });
+    } catch (err) {
+        console.error('Error computing balance:', err);
     }
-  }, []);
+  }, [centerId]);
 
   // تشغيل الـ Fetch عند التحميل أو تغيير الشهر
   useEffect(() => {
