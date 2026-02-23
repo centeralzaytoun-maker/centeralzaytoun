@@ -456,7 +456,7 @@ export default function StaffDashboard() {
             </div>
             
             <h2 className="text-3xl md:text-5xl font-black text-slate-800 leading-tight">
-              أهلاً بك، <span className="text-transparent bg-clip-text bg-gradient-to-l from-blue-600 to-indigo-600">{currentUserName.split(' ')[0]}</span> ✨
+              أهلاً بك، <span className="text-transparent bg-clip-text bg-gradient-to-l from-blue-600 to-indigo-600">{currentUserName}</span> ✨
             </h2>
             <p className="text-slate-500 font-bold text-sm md:text-lg max-w-xl mx-auto lg:mr-0 leading-relaxed">
               يوم جديد من الإنجاز بانتظارك! دعنا نساعدك في إدارة حصص اليوم بكل سلاسة واحترافية.

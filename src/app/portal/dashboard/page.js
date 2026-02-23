@@ -885,7 +885,7 @@ export default function StudentDashboard() {
             
             <div className="text-center md:text-left w-full md:w-auto border-t md:border-t-0 pt-4 md:pt-0 border-gray-50">
               <p className="text-base md:text-xl font-black text-blue-600 mb-1">
-                  {dailyGreeting.title}، {studentName.split(' ')[0] || 'بطل'}!
+                  {dailyGreeting.title}، {studentName || 'بطل'}!
               </p>
               <p className="text-[10px] md:text-sm text-gray-400 font-bold leading-relaxed">{dailyGreeting.subtitle}</p>
             </div>

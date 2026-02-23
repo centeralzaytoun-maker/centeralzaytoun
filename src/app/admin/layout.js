@@ -142,7 +142,7 @@ export default async function AdminLayout({ children }) {
               <div className="text-left flex flex-col items-end justify-center">
                 <h2 className="text-sm md:text-xl font-black text-white leading-tight">
                   <span className="text-white/70 font-bold text-xs md:text-sm block">أهلاً بك،</span>
-                  {userName.split(' ')[0]}
+                  {userName}
                 </h2>
                 <div className="hidden md:block">
                   <p className="text-white/60 text-xs font-bold mt-0.5">
