@@ -1,86 +1,75 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabaseBrowser } from '../../../../lib/supabase';
 import { 
   FaExclamationTriangle, FaSearch, FaWhatsapp, FaCheckCircle, 
-  FaArrowRight, FaFileExcel, FaUndo, FaFileDownload 
+  FaArrowLeft, FaFileExcel, FaUndo, FaFileDownload, FaUserGraduate,
+  FaBookOpen, FaChalkboardTeacher, FaFilter, FaMoneyBillWave, FaSync,
+  FaUsers, FaChartPie, FaChevronDown, FaEllipsisV, FaRegClock, FaCreditCard
 } from 'react-icons/fa';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
-import { useAuth } from '../../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
+import { useAuth } from '../../../../context/AuthContext';
 import { calculateRequiredPayment } from '../../../../utils/sessionCalculations';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function DebtsPage() {
-  const { centerId, allowedFeatures, loading: authLoading } = useAuth(); // 🛡️ Get permissions
-  const [permissionChecked, setPermissionChecked] = useState(false);
-
-  // 🛡️ Route Protection
-  useEffect(() => {
-    if (authLoading) return;
-    
-    if (allowedFeatures && !allowedFeatures.includes('students:finance')) {
-       // window.location.href = '/admin/dashboard'; // Force redirect if Router fails
-       // But we stick to useEffect logic, maybe just return null rendering.
-       // Actually let's just use the existing loading state or return null.
-    } else {
-        setPermissionChecked(true);
-    }
-  }, [allowedFeatures, authLoading]);
+  const { centerId, allowedFeatures, loading: authLoading } = useAuth();
   
-
-  
-  // التحقق من وجود centerId قبل تشغيل أي دوال
-  useEffect(() => {
-    if (!centerId) {
-      console.log('❌ No centerId found - waiting for authentication...');
-      return;
-    }
-    console.log('✅ centerId available:', centerId);
-  }, [centerId]);
-  
+  // 📊 Core Data States
   const [sessions, setSessions] = useState([]);
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [centerConfig, setCenterConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isSettleLoading, setIsSettleLoading] = useState(false);
+
+  // 🔍 Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedInstructor, setSelectedInstructor] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [isFilterVisible, setIsFilterVisible] = useState(true);
 
-  // 1. جلب البيانات من السيرفر عند تحميل الصفحة بشكل متوازي
+  // 🛡️ Route Protection
+  const hasAccess = useMemo(() => {
+    return !authLoading && allowedFeatures?.includes('students:finance');
+  }, [authLoading, allowedFeatures]);
+
   useEffect(() => {
-    if (!centerId) return;
-    
-    async function fetchData() {
-      try {
-        setLoading(true);
-        const [sessRes, studRes, courRes, subsRes, configRes] = await Promise.all([
-          supabaseBrowser.from('sessions').select('*').eq('center_id', centerId).order('created_at', { ascending: false }),
-          supabaseBrowser.from('students').select('*').eq('center_id', centerId),
-          supabaseBrowser.from('courses').select('id, name, instructor, instructors(id, name), grade').eq('center_id', centerId),
-          supabaseBrowser.from('student_subscriptions').select('*').eq('center_id', centerId),
-          supabaseBrowser.from('center_settings').select('*').eq('center_id', centerId).maybeSingle()
-        ]);
-
-        setSessions(sessRes.data || []);
-        setStudents(studRes.data || []);
-        setCourses(courRes.data || []);
-        setSubscriptions(subsRes.data || []);
-        setCenterConfig(configRes.data);
-      } catch (err) {
-        console.error("Fetch Error:", err);
-      } finally {
-        setLoading(false);
-      }
+    if (centerId) {
+      fetchData();
     }
-    
-    fetchData();
   }, [centerId]);
 
-  // 2. حساب المديونيات بشكل آلي
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [sessRes, studRes, courRes, subsRes, configRes] = await Promise.all([
+        supabaseBrowser.from('sessions').select('*').eq('center_id', centerId).order('created_at', { ascending: false }),
+        supabaseBrowser.from('students').select('*').eq('center_id', centerId),
+        supabaseBrowser.from('courses').select('id, name, instructor, instructors(id, name), grade').eq('center_id', centerId),
+        supabaseBrowser.from('student_subscriptions').select('*').eq('center_id', centerId),
+        supabaseBrowser.from('center_settings').select('*').eq('center_id', centerId).maybeSingle()
+      ]);
+
+      setSessions(sessRes.data || []);
+      setStudents(studRes.data || []);
+      setCourses(courRes.data || []);
+      setSubscriptions(subsRes.data || []);
+      setCenterConfig(configRes.data);
+    } catch (err) {
+      toast.error("خطأ في تحميل البيانات");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🧮 Debt Calculation Engine
   const allDebts = useMemo(() => {
     let debts = [];
     sessions.forEach(session => {
@@ -90,19 +79,15 @@ export default function DebtsPage() {
           if (!student) return;
 
           const course = courses.find(c => c.id === session.course_id);
-          
-          // التأكد من وجود أي اشتراك نشط يغطي تاريخ الحصة
-          // ملاحظة: نستخدم student.id (الـ UUID) للبحث في جدول الاشتراكات لضمان الدقة
           const studentSubs = (subscriptions || []).filter(s => s.student_id === student.id && s.course_id === session.course_id);
           const activeSub = studentSubs.find(sub => {
             if (!sub.expires_at) return false;
             const expiryDate = new Date(sub.expires_at);
-            expiryDate.setHours(23, 59, 59, 999); // نهاية يوم الانتهاء
+            expiryDate.setHours(23, 59, 59, 999);
             return expiryDate >= new Date(session.created_at);
           });
           
           const isPaidMonthly = !!activeSub;
-
           const required = calculateRequiredPayment(student, session, isPaidMonthly);
           const paid = parseFloat(paidAmount) || 0;
           const debtValue = required - paid;
@@ -124,7 +109,7 @@ export default function DebtsPage() {
                      (student.course_discounts?.[session.course_id] > 0 ? 'discount' : 'regular')),
               isMonthlyCourse: student.monthly_courses?.includes(session.course_id) || student.subscription_type === 'شهري',
               isPaidMonthly,
-              studentId: student.id // نستخدم الـ ID الحقيقي للبحث لاحقاً
+              studentId: student.id
             });
           }
         });
@@ -133,362 +118,391 @@ export default function DebtsPage() {
     return debts;
   }, [sessions, students, courses, subscriptions]);
 
-  // 3. تعريف قوائم الفلاتر
+  // 🧪 Statistics
+  const stats = useMemo(() => {
+    return {
+      total: allDebts.reduce((s, d) => s + d.amount, 0),
+      count: allDebts.length,
+      avg: allDebts.length ? allDebts.reduce((s, d) => s + d.amount, 0) / allDebts.length : 0,
+      monthly: allDebts.filter(d => d.isMonthlyCourse && !d.isPaidMonthly).length
+    };
+  }, [allDebts]);
+
+  // 🔍 Filter Logic
+  const filteredDebts = useMemo(() => {
+    return allDebts.filter(d => {
+      const mSearch = d.studentName?.toLowerCase().includes(searchTerm.toLowerCase());
+      const mGrade = !selectedGrade || d.grade === selectedGrade;
+      const mCourse = !selectedCourse || d.courseName === selectedCourse;
+      const mInstructor = !selectedInstructor || d.instructor === selectedInstructor;
+      const mStatus = !selectedStatus || 
+        (selectedStatus === 'monthly_expired' ? (d.isMonthlyCourse && !d.isPaidMonthly) : d.status === selectedStatus);
+      return mSearch && mGrade && mCourse && mInstructor && mStatus;
+    });
+  }, [allDebts, searchTerm, selectedGrade, selectedCourse, selectedInstructor, selectedStatus]);
+
   const availableGrades = useMemo(() => [...new Set(allDebts.map(d => d.grade))].filter(Boolean).sort(), [allDebts]);
   const availableCourses = useMemo(() => [...new Set(allDebts.map(d => d.courseName))].filter(Boolean).sort(), [allDebts]);
   const availableInstructors = useMemo(() => [...new Set(allDebts.map(d => d.instructor))].filter(Boolean).sort(), [allDebts]);
 
-  // 🛡️ Rendering Logic moved after hooks
-  if (authLoading || (allowedFeatures && !allowedFeatures.includes('students:finance'))) {
-    if (!authLoading && allowedFeatures && !allowedFeatures.includes('students:finance')) {
-         return (
-             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-red-500">
-                 <FaExclamationTriangle size={48} className="mb-4" />
-                 <h1 className="text-2xl font-bold">غير مصرح لك بالدخول لهذه الصفحة 🔒</h1>
-                 <Link href="/admin/dashboard" className="mt-4 text-blue-600 underline">العودة للرئيسية</Link>
-             </div>
-         );
+  // ⌨️ Handlers
+  const handleSettleDebt = async (debt) => {
+    if (!centerId) return toast.error('خطأ في المركز');
+    
+    const confirmSettle = window.confirm(`هل استلمت مبلغ ${debt.amount.toFixed(2)} ج من ${debt.studentName}؟`);
+    if (!confirmSettle) return;
+
+    setIsSettleLoading(true);
+    try {
+      const session = sessions.find(s => s.id === debt.sessionId);
+      const updatedPayments = { ...session.payments, [debt.studentUid]: (parseFloat(session.payments[debt.studentUid] || 0) + debt.amount).toFixed(2) };
+      
+      const { error } = await supabaseBrowser
+        .from('sessions')
+        .update({ payments: updatedPayments })
+        .eq('id', debt.sessionId)
+        .eq('center_id', centerId);
+
+      if (error) throw error;
+
+      setSessions(prev => prev.map(s => s.id === debt.sessionId ? { ...s, payments: updatedPayments } : s));
+      toast.success("تم تسديد المديونية بنجاح");
+    } catch (e) {
+      toast.error("حدث خطأ أثناء التسديد");
+    } finally {
+      setIsSettleLoading(false);
     }
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 italic text-gray-400">جاري التحقق من الصلاحيات...</div>;
-  }
+  };
 
+  const handleWhatsApp = (debt) => {
+    let p = debt.studentPhone.replace(/\D/g, ''); 
+    if (p.startsWith('01')) p = '2' + p;
+    let template = centerConfig?.msg_debt || "تذكير مالي: الطالب [name] متبقي عليه مبلغ [amount] ج.م من حصة [topic]";
+    const finalMsg = template
+      .replace(/\[name\]/g, debt.studentName)
+      .replace(/\[amount\]/g, debt.amount.toFixed(2))
+      .replace(/\[topic\]/g, debt.courseName);
+    window.open(`https://wa.me/${p}?text=${encodeURIComponent(finalMsg)}`, '_blank');
+  };
 
-  // 4. دالة تسديد الدين وتحديث قاعدة البيانات
-  const exportToExcel = () => {
-    // 1. الحصول على البيانات المفلترة حالياً
-    const filteredData = allDebts.filter(d => {
-      const search = searchTerm.toLowerCase();
-      const mGrade = !selectedGrade || d.grade === selectedGrade;
-      const mCourse = !selectedCourse || d.courseName === selectedCourse;
-      const mInstructor = !selectedInstructor || d.instructor === selectedInstructor;
-      return d.studentName?.toLowerCase().includes(search) && mGrade && mCourse && mInstructor;
+  const handleMassWhatsApp = () => {
+    if (filteredDebts.length === 0) return toast.error("القائمة فارغة");
+    if (!confirm(`سيتم فتح ${filteredDebts.length} محادثة واتساب متتابعة. هل تريد الاستمرار؟`)) return;
+
+    filteredDebts.forEach((d, i) => {
+      setTimeout(() => handleWhatsApp(d), i * 1500);
     });
+  };
 
-    if (filteredData.length === 0) return alert("لا توجد بيانات لتصديرها!");
-
-    // 2. تنسيق البيانات لتناسب ملف الإكسل
-    const excelRows = filteredData.map(d => ({
+  const exportToExcel = () => {
+    if (filteredDebts.length === 0) return toast.error("لا توجد بيانات لتصديرها");
+    const excelRows = filteredDebts.map(d => ({
       "اسم الطالب": d.studentName,
-      "الصف الدراسي": d.grade,
+      "الصف": d.grade,
       "المادة": d.courseName,
       "المدرس": d.instructor,
-      "المبلغ المتبقي": d.amount,
-      "تاريخ الحصة": new Date(d.date).toLocaleDateString('ar-EG'),
+      "المبلغ": d.amount,
+      "التاريخ": new Date(d.date).toLocaleDateString('ar-EG'),
       "رقم ولي الأمر": d.studentPhone
     }));
-
-    // 3. إنشاء ملف الإكسل وتحميله
     const worksheet = XLSX.utils.json_to_sheet(excelRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "المديونيات");
-    
-    // تحميل الملف باسم يحتوي على التاريخ الحالي
     XLSX.writeFile(workbook, `مديونيات_الطلاب_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  // دالة تسديد الدين
-  const handleSettleDebt = async (debt) => {
-    if (!centerId) {
-      alert('⚠️ لم يتم تحديد المركز! يرجى تسجيل الدخول مرة أخرى.');
-      return;
-    }
-    
-    if (!confirm(`هل استلمت مبلغ ${debt.amount.toFixed(2)} ج من ${debt.studentName}؟`)) return;
-    const session = sessions.find(s => s.id === debt.sessionId);
-    const updatedPayments = { ...session.payments, [debt.studentUid]: (parseFloat(session.payments[debt.studentUid] || 0) + debt.amount).toFixed(2) };
-    const { error } = await supabaseBrowser.from('sessions').update({ payments: updatedPayments }).eq('id', debt.sessionId).eq('center_id', centerId);
-    if (!error) {
-      setSessions(prev => prev.map(s => s.id === debt.sessionId ? { ...s, payments: updatedPayments } : s));
-      alert("تم التسديد بنجاح ✅");
-    }
-  }; // <--- قفلة دالة التسديد
-
-  // دالة المطالبة الجماعية (مستقلة)
-  const handleMassDebtAlert = () => {
-    filtered.forEach((d, i) => {
-  setTimeout(() => {
-    let p = d.studentPhone?.replace(/\D/g, '');
-    if (p.startsWith('01')) p = '2' + p;
-
-    // استخدام القالب الديناميكي هنا أيضاً
-    let template = centerConfig?.msg_debt || "تذكير مالي: الطالب [name] متبقي عليه [amount] ج.م من حصة [topic]";
-    const finalMsg = template
-      .replace(/\[name\]/g, d.studentName)
-      .replace(/\[amount\]/g, d.amount.toFixed(2))
-      .replace(/\[topic\]/g, d.courseName);
-
-    window.open(`https://wa.me/${p}?text=${encodeURIComponent(finalMsg)}`, '_blank');
-  }, i * 1300);
-  });
-  };
-
-  // دالة المسح السريع (Reset)
-  const resetFilters = () => {
-    setSearchTerm('');
-    setSelectedGrade('');
-    setSelectedCourse('');
-    setSelectedInstructor('');
-    setSelectedStatus('');
-  };
-
-
-  // التحقق من وجود centerId قبل عرض المحتوى
-  if (!centerId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-xl font-bold text-gray-400">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 animate-pulse"></div>
-          <p>جاري التحقق من صلاحيات الدخول...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // --- واجهة المستخدم الأساسية ---
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 text-right mb-20 md:mb-0" dir="rtl">
-      {/* 1. رأس الصفحة (الهيدر) */}
-      <div className="max-w-6xl mx-auto mb-6 md:mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
-          <Link href="/admin/sessions" className="bg-white p-2.5 rounded-full shadow hover:bg-gray-100 transition print:hidden shrink-0">
-            <FaArrowRight className="text-gray-600" />
-          </Link>
-          <h1 className="text-xl md:text-3xl font-black text-red-700 flex items-center gap-2 md:gap-3 truncate">
-            <FaExclamationTriangle className="shrink-0" /> <span className="truncate">سجل الدفعات المتأخرة</span>
-          </h1>
-        </div>
-        <div className="bg-red-600 text-white px-6 py-3 md:py-2 rounded-2xl shadow-lg text-center w-full md:w-auto">
-          <p className="text-[9px] md:text-[10px] opacity-80 uppercase font-bold tracking-wider">إجمالي المديونيات</p>
-          {loading ? (
-             <div className="h-8 w-24 bg-white/20 animate-pulse rounded mx-auto mt-1"></div>
-          ) : (
-            <p className="text-xl md:text-2xl font-black">{allDebts.reduce((s, d) => s + d.amount, 0).toFixed(2)} <span className="text-xs md:text-sm font-medium opacity-70">ج.م</span></p>
-          )}
-        </div>
-      </div>
-
-      {/* 2. شريط الفلاتر والأزرار الذكية */}
-      <div className="max-w-6xl mx-auto mb-6 bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 print:hidden text-right">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 items-end">
-          
-          {/* الفلاتر */}
-          <div className="sm:col-span-2 lg:col-span-1">
-            <label className="block text-[10px] md:text-xs font-bold text-gray-400 mb-1 mr-1 uppercase">بحث بالاسم</label>
-            <div className="relative">
-              <FaSearch className="absolute top-3.5 right-3.5 text-gray-300" />
-              <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="اسم الطالب..." className="w-full h-11 md:h-10 pr-10 pl-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-red-500 transition-all" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] md:text-xs font-bold text-gray-400 mb-1 mr-1 uppercase">تصفية بالصف</label>
-            <select value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)} className="w-full h-11 md:h-10 px-3 border border-gray-200 rounded-xl text-sm outline-none bg-white font-bold transition-all focus:border-red-500">
-              <option value="">كل الصفوف</option>
-              {availableGrades.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] md:text-xs font-bold text-gray-400 mb-1 mr-1 uppercase">المادة</label>
-            <select value={selectedCourse} onChange={e => setSelectedCourse(e.target.value)} className="w-full h-11 md:h-10 px-3 border border-gray-200 rounded-xl text-sm outline-none bg-white transition-all focus:border-red-500">
-              <option value="">كل المواد</option>
-              {availableCourses.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] md:text-xs font-bold text-gray-400 mb-1 mr-1 uppercase">المدرس</label>
-            <select value={selectedInstructor} onChange={e => setSelectedInstructor(e.target.value)} className="w-full h-11 md:h-10 px-3 border border-gray-200 rounded-xl text-sm outline-none bg-white font-medium transition-all focus:border-red-500">
-              <option value="">كل المدرسين</option>
-              {availableInstructors.map(i => <option key={i} value={i}>م/ {i}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] md:text-xs font-bold text-gray-400 mb-1 mr-1 uppercase">حالة المديونية</label>
-            <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)} className="w-full h-11 md:h-10 px-3 border border-gray-200 rounded-xl text-sm outline-none bg-white font-medium transition-all focus:border-red-500">
-              <option value="">كل الحالات</option>
-              <option value="monthly_expired">شهري (منتهي/لم يدفع) 📅</option>
-              <option value="centerOnly">سنتر فقط 🏢</option>
-              <option value="discount">بخصم خاص 📉</option>
-              <option value="regular">عادي 👤</option>
-            </select>
-          </div>
-
-          {/* قسم الأزرار المجمعة */}
-          <div className="flex gap-2">
-            <button 
-              onClick={exportToExcel}
-              className="flex-1 h-11 md:h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 shrink-0"
-              title="حفظ كملف إكسل"
-            >
-              <FaFileExcel className="text-sm shrink-0" /> إكسل
-            </button>
-
-            <button 
-              onClick={() => {
-                // 1. تحديد الديون المفلترة حالياً
-                const filtered = allDebts.filter(d => {
-                  const s = searchTerm.toLowerCase();
-                  const mStatus = !selectedStatus || 
-                    (selectedStatus === 'monthly_expired' ? (d.isMonthlyCourse && !d.isPaidMonthly) : d.status === selectedStatus);
-                  
-                  return d.studentName?.toLowerCase().includes(s) && 
-                        (!selectedGrade || d.grade === selectedGrade) && 
-                        (!selectedCourse || d.courseName === selectedCourse) && 
-                        (!selectedInstructor || d.instructor === selectedInstructor) &&
-                        mStatus;
-                });
-
-                if (filtered.length === 0) return alert("القائمة فارغة!");
-                if (!confirm(`فتح ${filtered.length} محادثة واتساب للمطالبة؟`)) return;
-
-                // 2. تشغيل المراسلة المتتابعة
-                filtered.forEach((d, i) => {
-                  setTimeout(() => {
-                    let p = d.studentPhone?.replace(/\D/g, '');
-                    if (p.startsWith('01')) p = '2' + p;
-
-                    // استخدام القالب الديناميكي من الإعدادات
-                    let template = centerConfig?.msg_debt || "تنبيه مالي: الطالب [name] متبقي عليه [amount] ج.م من حصة [topic]";
-                    
-                    const finalMsg = template
-                      .replace(/\[name\]/g, d.studentName)
-                      .replace(/\[amount\]/g, d.amount.toFixed(2))
-                      .replace(/\[topic\]/g, d.courseName);
-
-                    window.open(`https://wa.me/${p}?text=${encodeURIComponent(finalMsg)}`, '_blank');
-                  }, i * 1300); // فاصل زمني لتجنب الحظر
-                });
-              }}
-              className="flex-1 h-11 md:h-10 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 shrink-0"
-            >
-              <FaWhatsapp className="text-sm shrink-0" /> <span className="truncate">واتساب مجمع</span>
-            </button>
-
-            {/* زر المسح الدائري */}
-            {(searchTerm || selectedGrade || selectedCourse || selectedInstructor) && (
-              <button 
-                onClick={resetFilters}
-                className="w-11 md:w-10 h-11 md:h-10 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl flex items-center justify-center transition shadow-sm border border-gray-200 shrink-0"
-                title="مسح الفلاتر"
-              >
-                <FaUndo className="text-xs" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-          
-      {/* 3. الجدول */}
-      <div className="max-w-6xl mx-auto bg-white rounded-2xl md:rounded-3xl shadow-xl border border-gray-100 divide-y divide-gray-100">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-right border-collapse min-w-[600px]">
-            <thead className="bg-gray-900 text-white">
-              <tr className="text-xs md:text-sm">
-                <th className="p-4 md:p-5 whitespace-nowrap">الطالب</th>
-                <th className="p-4 md:p-5 text-center whitespace-nowrap">الصف</th>
-                <th className="p-4 md:p-5 text-center whitespace-nowrap">المادة</th>
-                <th className="p-4 md:p-5 text-center font-bold whitespace-nowrap">المبلغ</th>
-                <th className="p-4 whitespace-nowrap">تاريخ الحصة</th>
-                <th className="p-4 md:p-5 text-center whitespace-nowrap">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-2/3"></div></td>
-                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
-                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
-                    <td className="p-5"><div className="h-6 bg-red-50 rounded w-1/3 mx-auto"></div></td>
-                    <td className="p-5"><div className="h-4 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
-                    <td className="p-5"><div className="h-8 bg-gray-100 rounded w-1/2 mx-auto"></div></td>
-                  </tr>
-                ))
-              ) : (
-                allDebts
-                  .filter(d => {
-                    const search = searchTerm.toLowerCase();
-                    const mSearch = d.studentName?.toLowerCase().includes(search);
-                    const mGrade = !selectedGrade || d.grade === selectedGrade;
-                    const mCourse = !selectedCourse || d.courseName === selectedCourse;
-                    const mInstructor = !selectedInstructor || d.instructor === selectedInstructor;
-                    const mStatus = !selectedStatus || 
-                      (selectedStatus === 'monthly_expired' ? (d.isMonthlyCourse && !d.isPaidMonthly) : d.status === selectedStatus);
-                    return mSearch && mGrade && mCourse && mInstructor && mStatus;
-                  })
-                  .map(debt => (
-                    <tr key={debt.id} className="hover:bg-red-50/50 transition-colors">
-                      <td className="p-4 md:p-5 font-bold text-gray-800 whitespace-nowrap">{debt.studentName}</td>
-                      <td className="p-4 md:p-5 text-center">
-                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black border border-blue-200 whitespace-nowrap">
-                          {debt.grade}
-                        </span>
-                      </td>
-                      <td className="p-4 md:p-5 text-center whitespace-nowrap">
-                        <p className="font-bold text-xs md:text-sm">{debt.courseName}</p>
-                        <div className="flex flex-col items-center gap-1 mt-1">
-                          <p className="text-[9px] md:text-[10px] text-gray-400">م/ {debt.instructor}</p>
-                          
-                          {debt.isMonthlyCourse && !debt.isPaidMonthly && (
-                            <span className="px-2 py-0.5 bg-red-50 text-red-600 text-[8px] font-bold rounded border border-red-100">شهري غير مدفوع 📅</span>
-                          )}
-                          {debt.status === 'centerOnly' && (
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-bold rounded border border-blue-100">سنتر فقط 🏢</span>
-                          )}
-                          {debt.status === 'discount' && (
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[8px] font-bold rounded border border-amber-100">خصم خاص 📉</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 md:p-5 text-center font-black text-red-600 text-lg md:text-xl whitespace-nowrap">{debt.amount.toFixed(2)}</td>
-                      <td className="p-4 text-gray-500 font-mono text-xs md:text-sm whitespace-nowrap">
-                        {new Date(debt.date).toLocaleDateString('ar-EG', {
-                          year: 'numeric', month: 'short', day: 'numeric'
-                        })}
-                      </td>
-                      <td className="p-4 md:p-5 text-center">
-                        <div className="flex justify-center gap-2">
-                          <button onClick={() => handleSettleDebt(debt)} className="bg-green-600 hover:bg-green-700 text-white px-4 h-9 rounded-xl font-bold text-[10px] md:text-xs shadow transition active:scale-95 whitespace-nowrap">تسديد</button>
-                          <button 
-                            onClick={() => {
-                              // 1. تنظيف وتجهيز رقم التليفون
-                              let phone = debt.studentPhone.replace(/\D/g, ''); 
-                              if (phone.startsWith('01')) phone = '2' + phone;
-
-                              // 2. جلب القالب المخصص من الإعدادات أو استخدام قالب افتراضي
-                              let template = centerConfig?.msg_debt || "تذكير مالي: الطالب [name] متبقي عليه مبلغ [amount] ج.م من حصة [topic]";
-
-                              // 3. عملية الاستبدال الذكية للبيانات
-                              const finalMsg = template
-                                .replace(/\[name\]/g, debt.studentName)
-                                .replace(/\[amount\]/g, debt.amount.toFixed(2))
-                                .replace(/\[topic\]/g, debt.courseName);
-
-                              // 4. فتح الرابط
-                              window.open(`https://wa.me/${phone}?text=${encodeURIComponent(finalMsg)}`, '_blank');
-                            }} 
-                            className="bg-green-100 text-green-600 w-9 h-9 flex items-center justify-center rounded-xl hover:bg-green-200 transition shadow-sm active:scale-95 shrink-0"
-                            title="إرسال رسالة واتساب"
-                          >
-                            <FaWhatsapp className="text-lg" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        {allDebts.length === 0 && (
-          <div className="p-20 text-center text-gray-400">
-             <FaCheckCircle size={48} className="mx-auto mb-4 opacity-10" />
-             <p className="font-bold">لا يوجد مديونيات متأخرة حالياً.</p>
-          </div>
-        )}
+  if (authLoading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+        <p className="text-slate-400 font-black animate-pulse">جاري التحقق من الصلاحيات...</p>
       </div>
     </div>
   );
+
+  if (!hasAccess) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6 text-center">
+      <div className="w-24 h-24 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-red-100">
+        <FaExclamationTriangle size={40} />
+      </div>
+      <h1 className="text-2xl font-black text-slate-900 mb-2">عذراً، غير مصرح لك!</h1>
+      <p className="text-slate-500 font-bold mb-8">ليس لديك صلاحية الوصول لسجل المديونيات المالية.</p>
+      <Link href="/admin/dashboard" className="px-8 py-3 bg-slate-900 text-white rounded-2xl font-black shadow-lg hover:shadow-xl transition-all">العودة للرئيسية</Link>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] font-cairo pb-10" dir="rtl">
+      <Toaster position="top-center" />
+
+      {/* 🏔️ Header Section */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+            <div className="flex items-center gap-6">
+              <Link href="/admin/finance" className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-slate-100 group shadow-sm">
+                <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" />
+              </Link>
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-red-600/10 text-red-600 text-[10px] font-black px-3 py-1 rounded-full border border-red-100 uppercase tracking-tighter">Financial Risks</span>
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none">سجل المديونيات <span className="text-red-600">والدفعات المتأخرة</span></h1>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full md:w-auto">
+              {[
+                { label: 'إجمالي المديونات', value: stats.total.toFixed(2), unit: 'ج.م', color: 'red', icon: <FaMoneyBillWave /> },
+                { label: 'عدد المطالبات', value: stats.count, unit: 'طلب', color: 'blue', icon: <FaUsers /> },
+              ].map((s, i) => (
+                <div key={i} className="bg-white p-4 md:p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:shadow-xl hover:shadow-slate-100 transition-all">
+                  <div className={`w-12 h-12 rounded-2xl bg-${s.color}-600 text-white flex items-center justify-center text-xl shadow-lg shadow-${s.color}-100 transition-transform group-hover:rotate-12`}>{s.icon}</div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+                    <h3 className="text-xl md:text-2xl font-black text-slate-900">{s.value} <span className="text-xs opacity-40">{s.unit}</span></h3>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-8 mt-8 space-y-8">
+        {/* 🔍 Filter Studio */}
+        <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="flex flex-col lg:flex-row items-end gap-6">
+            <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">البحث عن طالب</label>
+                <div className="relative group">
+                  <FaSearch className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-red-500 transition-all" />
+                  <input 
+                    type="text" 
+                    placeholder="اسم الطالب..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full h-12 pr-11 pl-4 bg-slate-50 border-none rounded-xl text-xs font-black outline-none focus:ring-2 ring-red-500/10 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">الصف الدراسي</label>
+                <select 
+                  value={selectedGrade}
+                  onChange={(e) => setSelectedGrade(e.target.value)}
+                  className="w-full h-12 bg-slate-50 border-none rounded-xl px-4 text-xs font-black outline-none focus:ring-2 ring-red-500/10 appearance-none"
+                >
+                  <option value="">كل الصفوف</option>
+                  {availableGrades.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">المادة</label>
+                <select 
+                  value={selectedCourse}
+                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  className="w-full h-12 bg-slate-50 border-none rounded-xl px-4 text-xs font-black outline-none focus:ring-2 ring-red-500/10 appearance-none"
+                >
+                  <option value="">كل المواد</option>
+                  {availableCourses.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">المدرس</label>
+                <select 
+                  value={selectedInstructor}
+                  onChange={(e) => setSelectedInstructor(e.target.value)}
+                  className="w-full h-12 bg-slate-50 border-none rounded-xl px-4 text-xs font-black outline-none focus:ring-2 ring-red-500/10 appearance-none"
+                >
+                  <option value="">كل المدرسين</option>
+                  {availableInstructors.map(i => <option key={i} value={i}>م/ {i}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">الحالة</label>
+                <select 
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="w-full h-12 bg-slate-50 border-none rounded-xl px-4 text-xs font-black outline-none focus:ring-2 ring-red-500/10 appearance-none"
+                >
+                  <option value="">كل الحالات</option>
+                  <option value="monthly_expired">شهري (منتهي) 📅</option>
+                  <option value="centerOnly">سنتر فقط 🏢</option>
+                  <option value="discount">بخصم خاص 📉</option>
+                  <option value="regular">عادي 👤</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 w-full lg:w-auto">
+              {(searchTerm || selectedGrade || selectedCourse || selectedInstructor || selectedStatus) && (
+                <button 
+                  onClick={() => { setSearchTerm(''); setSelectedGrade(''); setSelectedCourse(''); setSelectedInstructor(''); setSelectedStatus(''); }}
+                  className="w-12 h-12 bg-slate-100 text-slate-400 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-all shrink-0 shadow-sm"
+                  title="مسح الكل"
+                >
+                  <FaUndo size={14} />
+                </button>
+              )}
+              <button 
+                onClick={exportToExcel}
+                className="flex-1 lg:flex-none px-6 h-12 bg-blue-600 text-white rounded-xl font-black text-xs flex items-center justify-center gap-3 shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all"
+              >
+                <FaFileExcel size={16}/> تصدير
+              </button>
+              <button 
+                onClick={handleMassWhatsApp}
+                className="flex-1 lg:flex-none px-6 h-12 bg-emerald-600 text-white rounded-xl font-black text-xs flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all"
+              >
+                <FaWhatsapp size={16}/> طلب جماعي
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 📊 Debt Ledger Table */}
+        <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest text-right">
+                  <th className="p-6">الطالب والبيانات</th>
+                  <th className="p-6">المادة والمحتوى</th>
+                  <th className="p-6 text-center">الصف</th>
+                  <th className="p-6 text-center">المبلغ المستحق</th>
+                  <th className="p-6 text-center">تاريخ المديونية</th>
+                  <th className="p-6 text-center">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {loading ? (
+                  [...Array(6)].map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td className="p-6"><div className="h-10 bg-slate-50 rounded-2xl w-48"></div></td>
+                      <td className="p-6"><div className="h-10 bg-slate-50 rounded-2xl w-32"></div></td>
+                      <td className="p-6"><div className="h-6 bg-slate-50 rounded-full w-20 mx-auto"></div></td>
+                      <td className="p-6"><div className="h-8 bg-red-50 rounded-xl w-24 mx-auto"></div></td>
+                      <td className="p-6"><div className="h-6 bg-slate-50 rounded-xl w-32 mx-auto"></div></td>
+                      <td className="p-6"><div className="h-10 bg-slate-50 rounded-2xl w-32 mx-auto"></div></td>
+                    </tr>
+                  ))
+                ) : filteredDebts.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="p-32 text-center">
+                      <div className="flex flex-col items-center gap-4 opacity-20">
+                        <FaCheckCircle size={80} className="text-emerald-500" />
+                        <h3 className="text-2xl font-black text-slate-900">لا يوجد مديونيات متأخرة</h3>
+                        <p className="text-sm font-bold">جميع المدفوعات تمت بشكل صحيح في هذا النطاق.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  <AnimatePresence>
+                    {filteredDebts.map((debt, idx) => (
+                      <motion.tr 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        key={debt.id} 
+                        className="hover:bg-slate-50/50 transition-colors group"
+                      >
+                        <td className="p-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 font-black text-lg group-hover:bg-white transition-all shadow-inner">
+                                    {debt.studentName?.[0]}
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-slate-800 text-sm mb-1">{debt.studentName}</h4>
+                                    <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold">
+                                        <FaPhone size={8}/> {debt.studentPhone || 'بدون رقم'}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td className="p-6 font-bold">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-slate-700">{debt.courseName}</span>
+                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                    <span className="text-[8px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black border border-slate-100">م/ {debt.instructor}</span>
+                                    {debt.isMonthlyCourse && !debt.isPaidMonthly && <span className="text-[8px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-black border border-red-100">شهري منتهي</span>}
+                                    {debt.status === 'centerOnly' && <span className="text-[8px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-black border border-indigo-100">سنتر فقط</span>}
+                                    {debt.status === 'discount' && <span className="text-[8px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-black border border-amber-100">خصم خاص</span>}
+                                </div>
+                            </div>
+                        </td>
+                        <td className="p-6 text-center">
+                            <span className="bg-blue-50 text-blue-600 text-[9px] font-black px-3 py-1 rounded-full border border-blue-100">
+                                {debt.grade}
+                            </span>
+                        </td>
+                        <td className="p-6 text-center">
+                            <div className="inline-flex flex-col items-center">
+                                <span className="text-xl font-black text-red-600 mb-0.5 tracking-tight">{debt.amount.toFixed(2)}</span>
+                                <span className="text-[8px] font-black text-slate-300 uppercase">جنيه مصري</span>
+                            </div>
+                        </td>
+                        <td className="p-6 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                                <span className="text-[10px] font-black text-slate-600">
+                                    {new Date(debt.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })}
+                                </span>
+                                <span className="text-[8px] font-bold text-slate-400 opacity-60 flex items-center gap-1 uppercase tracking-tighter">
+                                    <FaRegClock size={8}/> {new Date(debt.date).getFullYear()}
+                                </span>
+                            </div>
+                        </td>
+                        <td className="p-6">
+                            <div className="flex items-center justify-center gap-3">
+                                <button 
+                                    onClick={() => handleSettleDebt(debt)}
+                                    disabled={isSettleLoading}
+                                    className="bg-emerald-600 text-white h-10 px-5 rounded-xl text-[10px] font-black shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all transform active:scale-95 disabled:opacity-50"
+                                >
+                                    تسديد المبلغ
+                                </button>
+                                <button 
+                                    onClick={() => handleWhatsApp(debt)}
+                                    className="w-10 h-10 bg-white text-emerald-600 rounded-xl flex items-center justify-center border border-slate-100 shadow-sm hover:shadow-md hover:bg-emerald-50 transition-all transform active:scale-95"
+                                    title="إرسال تذكير"
+                                >
+                                    <FaWhatsapp size={18}/>
+                                </button>
+                                <button 
+                                    className="w-10 h-10 bg-white text-slate-300 rounded-xl flex items-center justify-center border border-slate-100 hover:text-slate-900 transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <FaEllipsisV size={12}/>
+                                </button>
+                            </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+        .font-cairo { font-family: 'Cairo', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+      `}</style>
+    </div>
+  );
+}
+
+// 📱 Reusable Mini Icon (optional but kept inline for now)
+function FaPhone({ size }) {
+    return <svg stroke="currentColor" fill="currentColor" strokeWidth="0" viewBox="0 0 512 512" height={size} width={size} xmlns="http://www.w3.org/2000/svg"><path d="M493.4 24.6l-104-24c-11.3-2.6-22.9 3.3-27.5 13.9l-48 112c-4.2 9.8-1.4 21.3 6.9 28l60.6 49.6c-36 76.7-98.9 140.5-177.2 177.2l-49.6-60.6c-6.7-8.3-18.2-11.1-28-6.9l-112 48C3.9 366.5-2 378.1.6 389.4l24 104C27.1 504.2 36.7 512 48 512c256.1 0 464-207.5 464-464 0-11.2-7.7-20.9-18.6-23.4z"></path></svg>;
 }
