@@ -239,15 +239,17 @@ export default function DebtsPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-            <div className="flex items-center gap-6">
-              <Link href="/admin/finance" className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-slate-100 group shadow-sm">
+            <div className="flex items-start gap-6">
+              <Link href="/admin/finance" className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-slate-100 group shadow-sm mt-2">
                 <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" />
               </Link>
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-red-600/10 text-red-600 text-[10px] font-black px-3 py-1 rounded-full border border-red-100 uppercase tracking-tighter">Financial Risks</span>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 mb-5">
+                  <span className="bg-red-600/10 text-red-600 text-[11px] font-black px-4 py-1.5 rounded-full border border-red-100 uppercase tracking-widest shadow-sm">Financial Risks</span>
                 </div>
-                <h1 className="text-3xl md:text-5xl font-black text-slate-900 leading-tight">سجل المديونيات <br className="md:hidden" /> <span className="text-red-600">والدفعات المتأخرة</span></h1>
+                <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 leading-[1.3] tracking-tight">
+                  سجل المديونيات <span className="text-red-600 block md:inline md:mr-2">والدفعات المتأخرة</span>
+                </h1>
               </div>
             </div>
 
