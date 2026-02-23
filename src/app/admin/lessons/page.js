@@ -5,7 +5,7 @@ import {
   FaVideo, FaFilePdf, FaPlus, FaTrash, FaEdit, 
   FaLayerGroup, FaPlayCircle, FaSave, FaTimes, FaLink,
   FaArrowLeft, FaCheckCircle, FaGlobe, FaLock, FaSortAmountDown,
-  FaEye, FaSearch, FaChevronDown, FaYoutube, FaVimeoV, FaCloud
+  FaEye, FaSearch, FaChevronDown, FaYoutube, FaVimeoV, FaCloud, FaFilter
 } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
