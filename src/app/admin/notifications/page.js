@@ -207,13 +207,21 @@ export default function AdminNotificationsPage() {
 
             if (targetList.length === 0) throw new Error('لا يوجد طلاب مستهدفين في هذا النطاق');
 
+            const currentCourse = courses.find(c => c.id === selectedCourseId);
+            const today = new Date().toLocaleDateString('ar-EG');
+            const now = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+
             const payload = targetList.map(st => ({
                 center_id: centerId,
                 student_id: st.id,
                 title: notification.title,
                 message: notification.message
                     .replace(/\[student\]/g, st.name)
-                    .replace(/\[grade\]/g, st.grade || ''),
+                    .replace(/\[grade\]/g, st.grade || '')
+                    .replace(/\[course\]/g, currentCourse?.name || 'الكورس')
+                    .replace(/\[instructor\]/g, currentCourse?.instructors?.name || 'المدرس')
+                    .replace(/\[date\]/g, today)
+                    .replace(/\[time\]/g, now),
                 type: notification.type,
                 status: isScheduled ? 'scheduled' : 'sent',
                 scheduled_at: isScheduled ? new Date(scheduledTime).toISOString() : null,
@@ -411,8 +419,11 @@ export default function AdminNotificationsPage() {
                                         <div className="flex flex-wrap gap-2 mb-2">
                                             {[
                                                 { tag: '[student]', label: 'اسم الطالب' },
+                                                { tag: '[course]', label: 'المادة' },
+                                                { tag: '[instructor]', label: 'المدرس' },
                                                 { tag: '[grade]', label: 'الصف' },
-                                                { tag: '[date]', label: 'تاريخ اليوم' },
+                                                { tag: '[date]', label: 'التاريخ' },
+                                                { tag: '[time]', label: 'الوقت' },
                                             ].map(t => (
                                                 <button 
                                                     key={t.tag}
