@@ -364,7 +364,7 @@ export default function LessonsPage() {
                     <input 
                       type="text" required
                       value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
-                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all text-white backdrop-blur-md"
+                      className="w-full h-14 bg-white text-slate-900 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:ring-4 ring-blue-500/20 transition-all shadow-lg shadow-black/10"
                       placeholder="مثال: أساسيات المشتقات والكامل"
                     />
                   </div>
@@ -373,7 +373,7 @@ export default function LessonsPage() {
                     <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 mr-1">وصف موجز (اختياري)</label>
                     <textarea 
                       value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})}
-                      className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-5 text-sm font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all text-white backdrop-blur-md resize-none"
+                      className="w-full h-24 bg-white text-slate-900 border-none rounded-2xl p-5 text-sm font-bold outline-none focus:ring-4 ring-blue-500/20 transition-all shadow-lg shadow-black/10 resize-none"
                       placeholder="اشرح للطالب ماذا سيتعلم في هذا الدرس..."
                     />
                   </div>
@@ -381,17 +381,17 @@ export default function LessonsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 mr-1">مزود الفيديو</label>
-                      <div className="relative">
+                      <div className="relative group/select">
                         <select 
                           value={formData.video_provider} onChange={e => setFormData({...formData, video_provider: e.target.value})}
-                          className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-xs font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all appearance-none"
+                          className="w-full h-14 bg-white text-slate-900 border-none rounded-2xl px-5 text-xs font-black outline-none focus:ring-4 ring-blue-500/20 transition-all appearance-none shadow-lg shadow-black/10 cursor-pointer"
                         >
-                          <option value="youtube" className="bg-slate-900">YouTube</option>
-                          <option value="vimeo" className="bg-slate-900">Vimeo</option>
-                          <option value="bunny" className="bg-slate-900">Bunny.net (Premium)</option>
-                          <option value="link" className="bg-slate-900">Direct MP4 Link</option>
+                          <option value="youtube">YouTube</option>
+                          <option value="vimeo">Vimeo</option>
+                          <option value="bunny">Bunny.net (Premium)</option>
+                          <option value="link">Direct MP4 Link</option>
                         </select>
-                        <FaChevronDown className="absolute left-5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" />
+                        <FaChevronDown className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover/select:text-blue-600 transition-colors" size={10} />
                       </div>
                     </div>
                     <div>
@@ -399,7 +399,7 @@ export default function LessonsPage() {
                       <input 
                         type="number"
                         value={formData.order_index} onChange={e => setFormData({...formData, order_index: parseInt(e.target.value)})}
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all"
+                        className="w-full h-14 bg-white text-slate-900 border-none rounded-2xl px-5 text-sm font-bold outline-none focus:ring-4 ring-blue-500/20 transition-all shadow-lg shadow-black/10"
                       />
                     </div>
                   </div>
@@ -407,11 +407,11 @@ export default function LessonsPage() {
                   <div>
                     <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 mr-1">رابط الفيديو</label>
                     <div className="relative">
-                      <FaLink className="absolute top-1/2 -translate-y-1/2 right-5 text-white/20" />
+                      <FaLink className="absolute top-1/2 -translate-y-1/2 right-5 text-slate-400" />
                       <input 
                         type="url"
                         value={formData.video_url || ''} onChange={e => setFormData({...formData, video_url: e.target.value})}
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl pr-12 pl-4 text-xs font-medium outline-none focus:ring-2 ring-blue-500/50 transition-all"
+                        className="w-full h-14 bg-white text-slate-900 border-none rounded-2xl pr-12 pl-4 text-xs font-black outline-none focus:ring-4 ring-blue-500/20 transition-all shadow-lg shadow-black/10"
                         placeholder="انسخ الرابط هنا..."
                       />
                     </div>
@@ -420,11 +420,11 @@ export default function LessonsPage() {
                   <div>
                     <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 mr-1">رابط المذكرة PDF</label>
                     <div className="relative">
-                      <FaFilePdf className="absolute top-1/2 -translate-y-1/2 right-5 text-white/20" />
+                      <FaFilePdf className="absolute top-1/2 -translate-y-1/2 right-5 text-slate-400" />
                       <input 
                         type="url"
                         value={formData.pdf_url || ''} onChange={e => setFormData({...formData, pdf_url: e.target.value})}
-                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl pr-12 pl-4 text-xs font-medium outline-none focus:ring-2 ring-blue-500/50 transition-all"
+                        className="w-full h-14 bg-white text-slate-900 border-none rounded-2xl pr-12 pl-4 text-xs font-black outline-none focus:ring-4 ring-blue-500/20 transition-all shadow-lg shadow-black/10"
                         placeholder="رابط ملف PDF من الدرايف أو سحابة كلاوزورا..."
                       />
                     </div>
