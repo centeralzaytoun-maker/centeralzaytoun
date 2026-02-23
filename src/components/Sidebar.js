@@ -30,7 +30,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     { id: 'dashboard', label: 'الرئيسية (الموظفين)', href: '/admin/staff_dashboard', icon: <FaHome />, feature: 'dashboard:staff' }, 
     { id: 'sessions', label: 'إدارة الحصص', href: '/admin/sessions', icon: <FaChalkboardTeacher />, feature: 'academic:sessions' }, 
     { id: 'students', label: 'الطلاب', href: '/admin/students', icon: <FaUsers />, feature: 'students:view' }, 
-    { id: 'instructors', label: 'المدرسين', href: '/admin/instructors', icon: <FaChalkboardTeacher />, feature: 'academic:sessions' }, 
+    { id: 'instructors', label: 'المدرسين', href: '/admin/instructors', icon: <FaChalkboardTeacher />, feature: 'page_instructors' }, 
     { id: 'courses', label: 'المواد الدراسية', href: '/admin/courses', icon: <FaLayerGroup />, feature: 'academic:sessions' }, 
     { id: 'groups', label: 'إدارة المجموعات', href: '/admin/groups', icon: <FaObjectGroup />, feature: 'academic:sessions' }, 
     { id: 'schedule', label: 'الجدول الدراسي', href: '/admin/schedule', icon: <FaCalendarAlt />, feature: 'academic:schedule' }, 
@@ -58,9 +58,6 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
 
   const visibleMenuItems = useMemo(() => {
     return menuItems.filter(item => {
-      // الـ Super Admin يرى كل شيء
-      if (userRole === 'super_admin') return true;
-      
       if (!item.feature) return true; 
 
       // 🛡️ خريطة الربط الشاملة بين (الصلاحية الوظيفية) و (ميزة الباقة الأساسية)
@@ -68,6 +65,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
         // إدارة الحصص والطلاب
         'dashboard:staff':   'page_staff_dashboard', // 🛡️ لوحة الموظفين
         'academic:sessions': 'page_sessions',
+        'page_instructors':  'page_instructors', // 🛡️ مديول المدرسين المخصص
         'students:view':     'page_students',
         'academic:schedule': 'page_schedule',
         'academic:exams':    'page_exams',
@@ -93,13 +91,18 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
 
       const requiredModule = packageMapping[item.feature];
       
-      // لو فيه ميزة باقة مرتبطة، والسنتر مش معاه الميزة دي -> اخفي العنصر فوراً
-      if (requiredModule && !allowedFeatures?.includes(requiredModule)) return false;
+      // 🛑 لو فيه ميزة باقة مرتبطة، والسنتر مش معاه الميزة دي -> اخفي العنصر فوراً (حتى للـ Super Admin)
+      if (requiredModule && !allowedFeatures?.includes(requiredModule)) {
+          return false;
+      }
 
-      // 🛡️ التحقق من الموديول (Flexibility Logic)
+      // 🛡️ التحقق من الموديول البرمجي (Flexibility Logic)
       if (item.module && !allowedFeatures?.includes(`module_${item.module}`)) {
           return false;
       }
+
+      // الـ Super Admin يرى كل شيء طالما المديول متاح في الباقة
+      if (userRole === 'super_admin') return true;
 
       // لو السنتر معاه الميزة، أو العنصر مش مرتبط بميزة باقة محددة، نتحقق من صلاحية اليوزر نفسه
       return allowedFeatures?.includes(item.feature);
@@ -108,9 +111,6 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
 
   const visibleAdminItems = useMemo(() => {
     return adminItems.filter(item => {
-      // الـ Super Admin يرى كل شيء
-      if (userRole === 'super_admin') return true;
-
       if (!item.feature) return true; 
 
       const packageMapping = {
@@ -125,7 +125,12 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
       };
 
       const requiredModule = packageMapping[item.feature];
+      
+      // 🛑 التحقق من الباقة أولاً
       if (requiredModule && !allowedFeatures?.includes(requiredModule)) return false;
+
+      // الـ Super Admin يرى كل شيء متاح في الباقة
+      if (userRole === 'super_admin') return true;
 
       return allowedFeatures?.includes(item.feature);
     });
