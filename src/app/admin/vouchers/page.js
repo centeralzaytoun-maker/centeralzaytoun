@@ -198,7 +198,9 @@ export default function VouchersPage() {
           <div class="card">
             <div class="branding">
               ${centerSettings?.logo_url ? `<img src="${centerSettings.logo_url}" alt="logo" />` : ''}
-              <div class="center-name">${centerSettings?.name || ''}</div>
+              <div class="center-name">
+                ${centerSettings?.is_instructor_mode ? `أ/ ${centerSettings.name}` : centerSettings?.name || ''}
+              </div>
             </div>
             <div class="course">${voucher.courses?.name}</div>
             <div class="code-label">كود تفعيل الحصة / الكورس</div>
@@ -246,7 +248,9 @@ export default function VouchersPage() {
               <div class="card">
                 <div class="branding">
                   ${centerSettings?.logo_url ? `<img src="${centerSettings.logo_url}" alt="logo" />` : ''}
-                  <div class="center-name">${centerSettings?.name || ''}</div>
+                  <div class="center-name">
+                    ${centerSettings?.is_instructor_mode ? `أ/ ${centerSettings.name}` : centerSettings?.name || ''}
+                  </div>
                 </div>
                 <div class="course">${v.courses?.name}</div>
                 <div class="grade">${v.courses?.grade || ''}</div>
