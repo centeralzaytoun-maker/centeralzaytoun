@@ -1,73 +1,104 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabase-browser';
+import { useState, useEffect, useMemo } from 'react';
+import { supabaseBrowser } from '../../../lib/supabase';
 import { useAuth } from '../../../context/AuthContext';
 import { 
-  FaTicketAlt, FaPlus, FaQrcode, FaTrash, 
-  FaFileExcel, FaCopy, FaCheck, FaSyncAlt 
+  FaTicketAlt, FaPlus, FaTrash, FaFileExcel, 
+  FaCopy, FaCheck, FaSyncAlt, FaSearch, 
+  FaFilter, FaArrowLeft, FaEye, FaPrint, FaBolt
 } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
+import toast, { Toaster } from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 
 export default function VouchersPage() {
-  const { centerId } = useAuth();
+  const { centerId, role, allowedFeatures } = useAuth();
+  
+  // 📊 States
   const [courses, setCourses] = useState([]);
-  const [stages, setStages] = useState([]); // 🆕 قائمة المراحل
+  const [stages, setStages] = useState([]); 
   const [vouchers, setVouchers] = useState([]);
-  const [selectedGrade, setSelectedGrade] = useState(''); // 🆕 الصف المختار
+  const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // 🔍 Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // all, available, used
+  const [selectedGrade, setSelectedGrade] = useState(''); 
   const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [count, setCount] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [count, setCount] = useState(10);
+  
+  // UI States
   const [copiedCode, setCopiedCode] = useState(null);
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   useEffect(() => {
     if (centerId) {
-      fetchStages();
-      fetchCourses();
-      fetchVouchers();
+      fetchInitialData();
     }
   }, [centerId]);
 
-  // 🆕 جلب المراحل الدراسية
-  const fetchStages = async () => {
-    const { data } = await supabase
-      .from('educational_stages')
-      .select('*')
-      .eq('center_id', centerId)
-      .order('sort_order', { ascending: true });
-    setStages(data || []);
-  };
+  const fetchInitialData = async () => {
+    setLoading(true);
+    try {
+      const [stagesRes, coursesRes, vouchersRes] = await Promise.all([
+        supabaseBrowser.from('educational_stages').select('*').eq('center_id', centerId).order('sort_order', { ascending: true }),
+        supabaseBrowser.from('courses').select('id, name, grade, instructors(name)').eq('center_id', centerId),
+        supabaseBrowser.from('recharge_codes').select('*, courses(name), students(name)').eq('center_id', centerId).order('created_at', { ascending: false })
+      ]);
 
-  const fetchCourses = async () => {
-    const { data } = await supabase
-      .from('courses')
-      .select('id, name, grade, instructors(name)')
-      .eq('center_id', centerId);
-    setCourses(data || []);
+      setStages(stagesRes.data || []);
+      setCourses(coursesRes.data || []);
+      setVouchers(vouchersRes.data || []);
+    } catch (error) {
+      toast.error('خطأ في تحميل البيانات');
+    } finally {
+      setLoading(false);
+    }
   };
-
-  // 🆕 الكورسات المفلترة بناءً على الصف المختار
-  const filteredCourses = courses.filter(c => !selectedGrade || c.grade === selectedGrade);
 
   const fetchVouchers = async () => {
-    setLoading(true);
-    const { data } = await supabase
+    const { data } = await supabaseBrowser
       .from('recharge_codes')
       .select('*, courses(name), students(name)')
       .eq('center_id', centerId)
       .order('created_at', { ascending: false });
     setVouchers(data || []);
-    setLoading(false);
   };
 
+  // 🧪 Logic
+  const stats = useMemo(() => {
+    const total = vouchers.length;
+    const used = vouchers.filter(v => v.is_used).length;
+    const available = total - used;
+    return { total, used, available };
+  }, [vouchers]);
+
+  const filteredVouchers = useMemo(() => {
+    return vouchers.filter(v => {
+      const matchesSearch = v.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           v.students?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || 
+                           (statusFilter === 'used' ? v.is_used : !v.is_used);
+      const matchesGrade = !selectedGrade || v.courses?.grade === selectedGrade;
+      const matchesCourse = !selectedCourseId || v.course_id === selectedCourseId;
+      
+      return matchesSearch && matchesStatus && matchesGrade && matchesCourse;
+    });
+  }, [vouchers, searchTerm, statusFilter, selectedGrade, selectedCourseId]);
+
   const generateVouchers = async () => {
-    if (!selectedCourseId || count < 1) return alert('يرجى اختيار مادة وإدخال عدد صحيح');
+    if (!selectedCourseId || count < 1) return toast.error('يرجى اختيار مادة وتحديد العدد');
+    if (count > 500) return toast.error('لا يمكن توليد أكثر من 500 كود في المرة الواحدة');
     
-    setLoading(true);
+    setIsGenerating(true);
     const newVouchers = [];
     const prefix = 'CLS';
     
     for (let i = 0; i < count; i++) {
-      const code = `${prefix}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      // 🔐 توليد كود أكثر أماناً وطولاً
+      const code = `${prefix}-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       newVouchers.push({
         center_id: centerId,
         code,
@@ -77,177 +108,340 @@ export default function VouchersPage() {
       });
     }
 
-    const { error } = await supabase.from('recharge_codes').insert(newVouchers);
+    const { error } = await supabaseBrowser.from('recharge_codes').insert(newVouchers);
     
     if (!error) {
-      alert(`تم توليد ${count} كود بنجاح ✅`);
-      fetchVouchers();
+      toast.success(`تم توليد ${count} كود بنجاح ⚡`);
+      await fetchVouchers();
+      setShowGenerator(false);
     } else {
-      alert('خطأ أثناء التوليد: ' + error.message);
+      toast.error('حدث خطأ أثناء التوليد');
     }
-    setLoading(false);
+    setIsGenerating(false);
   };
 
-  const deleteVoucher = async (id) => {
-    if (!confirm('هل أنت متأكد؟')) return;
-    const { error } = await supabase.from('recharge_codes').delete().eq('id', id);
-    if (!error) setVouchers(vouchers.filter(v => v.id !== id));
+  const deleteBatch = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`هل أنت متأكد من حذف ${selectedIds.length} كود؟ (سيتم حذف الأكواد غير المستخدمة فقط)`)) return;
+    
+    const { error } = await supabaseBrowser
+      .from('recharge_codes')
+      .delete()
+      .in('id', selectedIds)
+      .eq('is_used', false);
+      
+    if (!error) {
+      toast.success('تم الحذف بنجاح');
+      setSelectedIds([]);
+      fetchVouchers();
+    } else {
+      toast.error('حدث خطأ أثناء الحذف');
+    }
   };
 
   const copyToClipboard = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
+    toast.success('تم النسخ للحافظة');
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
   const exportToExcel = () => {
-    const data = vouchers.map(v => ({
+    const data = filteredVouchers.map(v => ({
       'الكود': v.code,
-      'المادة': v.courses?.name || 'غير محدد',
-      'الحالة': v.is_used ? 'مستخدم' : 'متاح',
-      'تاريخ التوليد': new Date(v.created_at).toLocaleDateString('ar-EG'),
+      'المادة': v.courses?.name || '---',
+      'الصف': v.courses?.grade || '---',
+      'الحالة': v.is_used ? '❌ مستخدم' : '✅ متاح',
+      'تاريخ التوليد': new Date(v.created_at).toLocaleString('ar-EG'),
       'استخدم بواسطة': v.students?.name || '-'
     }));
     
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "أكواد الشحن");
-    XLSX.writeFile(wb, `vouchers_${new Date().getTime()}.xlsx`);
+    XLSX.writeFile(wb, `أكواد_شحن_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto" dir="rtl">
+    <div className="min-h-screen bg-[#f8fafc] p-4 md:p-8 font-cairo" dir="rtl">
+      <Toaster position="top-center" />
       
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
-        <div>
-           <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-             <FaTicketAlt className="text-amber-500" /> إدارة أكواد الشحن
-           </h1>
-           <p className="text-slate-500 text-sm mt-1">وّلد أكواد لبيع الكورسات في المكتبات والسناتر</p>
+      {/* 🚀 Header Section */}
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
+        <div className="flex items-center gap-5 w-full md:w-auto">
+          <Link href="/admin/dashboard" className="bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition-all border border-slate-100 group">
+            <FaArrowLeft className="text-slate-400 group-hover:text-blue-600 transition-colors" />
+          </Link>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black text-slate-800 flex items-center gap-3">
+              نظام الأكواد الذكي <span className="bg-amber-100 text-amber-600 text-[10px] px-2 py-1 rounded-lg">VOUCHER PRO</span>
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">إدارة وتوليد أكواد بيع المحتوى والملازم بأمان عالٍ</p>
+          </div>
         </div>
 
-        <button 
-          onClick={exportToExcel}
-          className="bg-green-600 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg shadow-green-100 hover:bg-green-700 transition"
-        >
-          <FaFileExcel /> تصدير لإكسيل
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button 
+            onClick={exportToExcel}
+            className="flex-1 md:flex-none px-6 py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <FaFileExcel className="text-green-600 text-lg" /> تصدير إكسيل
+          </button>
+          <button 
+            onClick={() => setShowGenerator(!showGenerator)}
+            className="flex-1 md:flex-none px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-3 hover:shadow-xl hover:shadow-blue-200 transition-all shadow-lg active:scale-95"
+          >
+            {showGenerator ? <><FaPlus size={14} className="rotate-45" /> إغلاق</> : <><FaPlus size={14} /> توليد أكواد جديدة</>}
+          </button>
+        </div>
       </div>
 
-      {/* Generator Section */}
-      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-sm mb-10">
-         <h2 className="font-black text-slate-700 mb-6 flex items-center gap-2">
-           <FaPlus className="text-blue-500 text-xs" /> توليد أكواد جديدة
-         </h2>
-         
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
-            {/* 🆕 فلتر الصف الدراسي */}
-            <div>
-               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mr-1">الصف الدراسي</label>
-               <select 
-                 value={selectedGrade}
-                 onChange={(e) => {
-                   setSelectedGrade(e.target.value);
-                   setSelectedCourseId('');
-                 }}
-                 className="w-full h-12 bg-slate-50 border-none rounded-2xl px-4 text-xs font-bold outline-none focus:ring-2 ring-blue-500/10 transition-all"
-               >
-                 <option value="">-- كل الصفوف --</option>
-                 {stages.map(s => (
-                   <option key={s.id} value={s.name}>{s.name}</option>
-                 ))}
-               </select>
-            </div>
-
-            <div>
-               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mr-1">المادة (المدرس)</label>
-               <select 
-                 value={selectedCourseId}
-                 onChange={(e) => setSelectedCourseId(e.target.value)}
-                 className="w-full h-12 bg-slate-50 border-none rounded-2xl px-4 text-xs font-bold outline-none focus:ring-2 ring-blue-500/10 transition-all"
-               >
-                 <option value="">-- اختر مادة --</option>
-                 {filteredCourses.map(c => (
-                   <option key={c.id} value={c.id}>
-                     {c.name} - مستر/ {c.instructors?.name || 'مجهول'}
-                   </option>
-                 ))}
-               </select>
-            </div>
-
-            <div>
-               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mr-1">الكمية</label>
-               <input 
-                 type="number" min="1" max="1000"
-                 value={count} onChange={(e) => setCount(parseInt(e.target.value))}
-                 className="w-full h-12 bg-slate-50 border-none rounded-2xl px-4 text-sm font-bold outline-none"
-               />
-            </div>
-
-            <button 
-              onClick={generateVouchers}
-              disabled={loading || !selectedCourseId}
-              className="h-12 bg-blue-600 text-white rounded-2xl font-black text-sm hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+      <div className="max-w-7xl mx-auto">
+        {/* 📊 Stats Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          {[
+            { label: 'إجمالي الأكواد', value: stats.total, color: 'blue', icon: <FaTicketAlt /> },
+            { label: 'أكواد متاحة للبيع', value: stats.available, color: 'emerald', icon: <FaCheck /> },
+            { label: 'أكواد تم تفعيلها', value: stats.used, color: 'amber', icon: <FaBolt /> },
+          ].map((stat, i) => (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              key={stat.label} 
+              className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-6"
             >
-              <FaSyncAlt className={loading ? 'animate-spin' : ''} /> توليد الآن
-            </button>
-         </div>
-      </div>
+              <div className={`w-16 h-16 rounded-3xl bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center text-2xl shadow-inner`}>
+                {stat.icon}
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                <h3 className="text-3xl font-black text-slate-900">{stat.value.toLocaleString()}</h3>
+              </div>
+            </motion.div>
+          ))}
+        </div>
 
-      {/* Vouchers Table */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-         <div className="overflow-x-auto">
-           <table className="w-full text-right">
-              <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                <tr>
-                   <th className="px-6 py-4">الكود</th>
-                   <th className="px-6 py-4">المادة</th>
-                   <th className="px-6 py-4">الحالة</th>
-                   <th className="px-6 py-4">استخدم بواسطة</th>
-                   <th className="px-6 py-4">تاريخ التوليد</th>
-                   <th className="px-6 py-4">الإجراءات</th>
+        {/* 🪄 Generator Panel */}
+        <AnimatePresence>
+          {showGenerator && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden mb-10"
+            >
+              <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-2xl relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]"></div>
+                <h3 className="text-xl font-black mb-8 flex items-center gap-3">
+                  <span className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg"><FaPlus size={14} /></span>
+                  تجهيز دفعة أكواد جديدة
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end relative z-10">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mr-1">الصف الدراسي</label>
+                    <select 
+                      value={selectedGrade}
+                      onChange={(e) => { setSelectedGrade(e.target.value); setSelectedCourseId(''); }}
+                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all text-white backdrop-blur-md"
+                    >
+                      <option value="" className="text-slate-900">-- كل الصفوف --</option>
+                      {stages.map(s => <option key={s.id} value={s.name} className="text-slate-900">{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="lg:col-span-1">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mr-1">المادة (المدرس)</label>
+                    <select 
+                      value={selectedCourseId}
+                      onChange={(e) => setSelectedCourseId(e.target.value)}
+                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all text-white backdrop-blur-md"
+                    >
+                      <option value="" className="text-slate-900">-- اختر مادة --</option>
+                      {courses.filter(c => !selectedGrade || c.grade === selectedGrade).map(c => (
+                        <option key={c.id} value={c.id} className="text-slate-900">{c.name} - {c.instructors?.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mr-1">الكمية المطلوبة</label>
+                    <input 
+                      type="number" min="1" max="500"
+                      value={count} onChange={(e) => setCount(parseInt(e.target.value))}
+                      className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm font-black outline-none focus:ring-2 ring-blue-500/50 transition-all text-white text-center backdrop-blur-md"
+                    />
+                  </div>
+                  <button 
+                    onClick={generateVouchers}
+                    disabled={isGenerating || !selectedCourseId}
+                    className="h-14 bg-white text-slate-900 rounded-2xl font-black text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-3 disabled:opacity-30 shadow-xl shadow-blue-900/50 group"
+                  >
+                    {isGenerating ? <FaSyncAlt className="animate-spin" /> : <FaBolt className="text-blue-600 group-hover:scale-125 transition-transform" />}
+                    توليد وحفظ الدفعة
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 🔍 Filter & Search Bar */}
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm mb-6 flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <FaSearch className="absolute top-1/2 -translate-y-1/2 right-5 text-slate-300" />
+            <input 
+              type="text" 
+              placeholder="ابحث بالكود أو اسم الطالب..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-14 pr-12 pl-4 bg-slate-50 border-none rounded-2xl text-sm font-bold outline-none focus:ring-2 ring-blue-100 transition-all"
+            />
+          </div>
+          <div className="flex gap-2 min-w-[150px]">
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-14 px-5 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none focus:ring-2 ring-blue-100"
+            >
+              <option value="all">كل الحالات</option>
+              <option value="available">متاح فقط ✅</option>
+              <option value="used">مستخدم فقط ❌</option>
+            </select>
+          </div>
+          
+          {selectedIds.length > 0 && (
+            <motion.button 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              onClick={deleteBatch}
+              className="h-14 px-6 bg-red-50 text-red-600 rounded-2xl font-black text-xs flex items-center justify-center gap-2 border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-50"
+            >
+              <FaTrash /> حذف المحدد ({selectedIds.length})
+            </motion.button>
+          )}
+        </div>
+
+        {/* 📑 Data Table */}
+        <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+              <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full shadow-lg"></div>
+            </div>
+          )}
+          
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-right">
+              <thead>
+                <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest">
+                  <th className="px-8 py-6 w-10">
+                    <input 
+                      type="checkbox" 
+                      onChange={(e) => setSelectedIds(e.target.checked ? filteredVouchers.filter(v => !v.is_used).map(v => v.id) : [])}
+                      checked={selectedIds.length > 0 && selectedIds.length === filteredVouchers.filter(v => !v.is_used).length}
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500" 
+                    />
+                  </th>
+                  <th className="px-6 py-6 font-black">الكود السري</th>
+                  <th className="px-6 py-6">المادة / المدرس</th>
+                  <th className="px-6 py-6 text-center">الحالة</th>
+                  <th className="px-6 py-6">تفاصيل الاستخدام</th>
+                  <th className="px-6 py-6">تاريخ الصدور</th>
+                  <th className="px-6 py-6 text-center">الإجراءات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
-                {vouchers.map((v) => (
-                  <tr key={v.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-4">
-                       <div className="flex items-center gap-2">
-                          <code className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-mono text-xs font-bold">{v.code}</code>
+              <tbody className="divide-y divide-slate-100">
+                {filteredVouchers.map((v) => (
+                  <tr key={v.id} className={`hover:bg-slate-50/80 transition-all group ${v.is_used ? 'opacity-80' : ''}`}>
+                    <td className="px-8 py-5">
+                      {!v.is_used && (
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.includes(v.id)}
+                          onChange={(e) => setSelectedIds(e.target.checked ? [...selectedIds, v.id] : selectedIds.filter(id => id !== v.id))}
+                          className="w-4 h-4 rounded border-slate-200 text-blue-600 focus:ring-blue-100" 
+                        />
+                      )}
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="relative group/code">
+                          <code className={`px-4 py-2 rounded-xl font-mono text-sm font-black transition-all ${v.is_used ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-700 group-hover:bg-blue-600 group-hover:text-white'}`}>
+                            {v.code}
+                          </code>
                           <button 
                             onClick={() => copyToClipboard(v.code)}
-                            className="text-slate-300 hover:text-blue-500 transition-colors"
+                            className="absolute -top-3 -left-3 bg-white w-7 h-7 rounded-full shadow-lg border border-slate-100 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-all opacity-0 group-hover/code:opacity-100 scale-75 group-hover/code:scale-100"
                           >
-                            {copiedCode === v.code ? <FaCheck className="text-green-500" /> : <FaCopy />}
+                            {copiedCode === v.code ? <FaCheck className="text-green-500" size={10} /> : <FaCopy size={10} />}
                           </button>
-                       </div>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-slate-700">{v.courses?.name || '-'}</td>
-                    <td className="px-6 py-4">
-                       <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${v.is_used ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'}`}>
-                          {v.is_used ? 'مستخدم' : 'متاح'}
-                       </span>
+                    <td className="px-6 py-5">
+                      <p className="text-sm font-black text-slate-800">{v.courses?.name || 'مادة محذوفة'}</p>
+                      <span className="text-[10px] font-bold text-slate-400">الصف: {v.courses?.grade}</span>
                     </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-500">{v.students?.name || '-'}</td>
-                    <td className="px-6 py-4 text-[10px] text-slate-400 font-bold">{new Date(v.created_at).toLocaleDateString('ar-EG')}</td>
-                    <td className="px-6 py-4">
-                       {!v.is_used && (
-                         <button onClick={() => deleteVoucher(v.id)} className="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-400 rounded-lg hover:bg-red-50 hover:text-red-500 transition-all">
-                            <FaTrash size={12} />
+                    <td className="px-6 py-5 text-center">
+                      <span className={`inline-flex items-center gap-1.5 text-[9px] font-black px-3 py-1 rounded-full border ${v.is_used ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                        {v.is_used ? <><FaBolt size={8}/> مستخدم</> : <><FaCheck size={8}/> متاح للبيع</>}
+                      </span>
+                    </td>
+                    <td className="px-6 py-5">
+                      {v.is_used ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black text-slate-700">{v.students?.name}</span>
+                          <span className="text-[9px] text-slate-400 font-bold">بتاريخ: {new Date(v.updated_at || v.created_at).toLocaleDateString('ar-EG')}</span>
+                        </div>
+                      ) : <span className="text-[10px] text-slate-300 font-bold italic">-- لم يُفعّل بعد --</span>}
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-slate-600">{new Date(v.created_at).toLocaleDateString('ar-EG')}</span>
+                        <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{new Date(v.created_at).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex justify-center items-center gap-2">
+                         {!v.is_used && (
+                           <button 
+                            onClick={async () => {
+                              if(!confirm('حذف الكود نهائياً؟')) return;
+                              const { error } = await supabaseBrowser.from('recharge_codes').delete().eq('id', v.id);
+                              if(!error) { toast.success('تم الحذف'); fetchVouchers(); }
+                            }}
+                            className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all border border-transparent hover:border-red-100"
+                           >
+                              <FaTrash size={12} />
+                           </button>
+                         )}
+                         <button className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-400 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all" title="معاينة الطباعة">
+                            <FaPrint size={12} />
                          </button>
-                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
-           </table>
-           {vouchers.length === 0 && !loading && (
-             <div className="p-10 text-center text-slate-400 font-bold">لا توجد أكواد حالياً. ابدأ بتوليد بعض الأكواد!</div>
-           )}
-         </div>
+            </table>
+
+            {filteredVouchers.length === 0 && !loading && (
+              <div className="p-24 text-center">
+                <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6">
+                  <FaTicketAlt size={40} className="text-slate-200" />
+                </div>
+                <h3 className="text-xl font-black text-slate-400">لا توجد أكواد تطابق البحث</h3>
+                <p className="text-sm text-slate-300 mt-2 font-bold">جرب تغيير فلاتر البحث أو توليد أكواد جديدة</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
     </div>
   );
 }
