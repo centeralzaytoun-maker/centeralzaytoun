@@ -46,7 +46,7 @@ export default function VouchersPage() {
       const [stagesRes, coursesRes, vouchersRes] = await Promise.all([
         supabaseBrowser.from('educational_stages').select('*').eq('center_id', centerId).order('sort_order', { ascending: true }),
         supabaseBrowser.from('courses').select('id, name, grade, instructors(name)').eq('center_id', centerId),
-        supabaseBrowser.from('recharge_codes').select('*, courses(name), students(name)').eq('center_id', centerId).order('created_at', { ascending: false })
+        supabaseBrowser.from('recharge_codes').select('*, courses(name, grade), students(name)').eq('center_id', centerId).order('created_at', { ascending: false })
       ]);
 
       setStages(stagesRes.data || []);
@@ -62,7 +62,7 @@ export default function VouchersPage() {
   const fetchVouchers = async () => {
     const { data } = await supabaseBrowser
       .from('recharge_codes')
-      .select('*, courses(name), students(name)')
+      .select('*, courses(name, grade), students(name)')
       .eq('center_id', centerId)
       .order('created_at', { ascending: false });
     setVouchers(data || []);
@@ -161,6 +161,39 @@ export default function VouchersPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "أكواد الشحن");
     XLSX.writeFile(wb, `أكواد_شحن_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const handlePrint = (voucher) => {
+    const printWindow = window.open('', '_blank');
+    const html = `
+      <html>
+        <head>
+          <title>طباعة كود الشحن</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap');
+            body { font-family: 'Cairo', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f8fafc; }
+            .card { background: white; border: 4px solid #2563eb; padding: 40px; border-radius: 30px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.1); width: 400px; position: relative; overflow: hidden; }
+            .card::before { content: ""; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: #2563eb; opacity: 0.1; clip-path: circle(50% at 100% 0); }
+            .logo { color: #2563eb; font-weight: 900; font-size: 24px; margin-bottom: 20px; }
+            .course { font-size: 18px; color: #64748b; margin-bottom: 10px; font-weight: 700; }
+            .code-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
+            .code { font-size: 32px; font-weight: 900; color: #1e293b; background: #eff6ff; padding: 15px; border-radius: 15px; border: 2px dashed #bfdbfe; font-family: monospace; letter-spacing: 2px; }
+            .footer { margin-top: 30px; font-size: 12px; color: #94a3b8; }
+          </style>
+        </head>
+        <body onload="window.print(); window.close();">
+          <div class="card">
+            <div class="logo">⚡ CLASORA VOUCHER</div>
+            <div class="course">${voucher.courses?.name}</div>
+            <div class="code-label">كود تفعيل الحصة / الكورس</div>
+            <div class="code">${voucher.code}</div>
+            <div class="footer">صالح للاستخدام لمرة واحدة فقط</div>
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   return (
@@ -414,7 +447,11 @@ export default function VouchersPage() {
                               <FaTrash size={12} />
                            </button>
                          )}
-                         <button className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-400 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all" title="معاينة الطباعة">
+                         <button 
+                            onClick={() => handlePrint(v)}
+                            className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-400 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all" 
+                            title="معاينة الطباعة"
+                         >
                             <FaPrint size={12} />
                          </button>
                       </div>
