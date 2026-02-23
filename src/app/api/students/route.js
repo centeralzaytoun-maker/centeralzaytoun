@@ -96,6 +96,27 @@ export async function POST(req) {
       );
     }
 
+    // 🛡️ Enforcement: Check Student Limit (max_students)
+    const { data: centerData } = await supabaseAdmin
+      .from('centers')
+      .select('package_id, packages(max_students)')
+      .eq('id', studentData.center_id)
+      .single();
+
+    if (centerData?.packages?.max_students) {
+      const { count } = await supabaseAdmin
+        .from('students')
+        .select('id', { count: 'exact', head: true })
+        .eq('center_id', studentData.center_id);
+
+      if (count >= centerData.packages.max_students) {
+        return NextResponse.json(
+          { error: `عذراً، لقد وصل المركز للحد الأقصى من الطلاب المسموح به في الباقة الحالية (${centerData.packages.max_students} طالب).` },
+          { status: 403 }
+        );
+      }
+    }
+
     // 🎯 NEW: Generate Sequential Unique ID with Collision Protection
     let uniqueId = studentData.unique_id;
     let wasAdjusted = false;

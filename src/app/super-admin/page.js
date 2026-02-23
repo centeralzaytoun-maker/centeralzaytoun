@@ -116,7 +116,7 @@ export default function SuperAdminDashboard() {
         try {
             const { data: centersData, error } = await supabaseBrowser
                 .from('centers')
-                .select('id, name, created_at, is_active, subscription_end_date, package_id, center_type, packages ( id, name, price )')
+                .select('id, name, created_at, is_active, subscription_end_date, package_id, center_type, packages ( id, name, price, max_students )')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -136,7 +136,7 @@ export default function SuperAdminDashboard() {
                 const sessCount = sessionMap[c.id] || 0;
                 // المعادلة: 0.1 ميجا قاعدة + 0.05 لكل طالب + 0.1 لكل حصة
                 const usage = (0.1 + (sCount * 0.05) + (sessCount * 0.1)).toFixed(1);
-                return { ...c, usageMB: usage };
+                return { ...c, usageMB: usage, studentCount: sCount };
             });
 
             setCenters(enriched || []);
@@ -656,6 +656,7 @@ export default function SuperAdminDashboard() {
                                         <th className="px-6 py-4">اسم السنتر</th>
                                         <th className="px-6 py-4">النوع</th>
                                         <th className="px-6 py-4">الباقة الحالية</th>
+                                        <th className="px-6 py-4">الطلاب حالياً</th>
                                         <th className="px-6 py-4">الاستهلاك</th>
                                         <th className="px-6 py-4">تاريخ الانتهاء</th>
                                         <th className="px-6 py-4">الحالة</th>
@@ -685,6 +686,21 @@ export default function SuperAdminDashboard() {
                                                     </button>
                                                 </td>
                                                 <td className="px-6 py-4 font-bold text-blue-600">{center.packages?.name || 'بدون باقة'}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg text-xs w-fit">
+                                                            {center.studentCount || 0} / {center.packages?.max_students || '∞'} 👤
+                                                        </span>
+                                                        {center.packages?.max_students && (
+                                                            <div className="w-16 bg-slate-100 h-1 rounded-full overflow-hidden mt-1">
+                                                                <div 
+                                                                    className={`h-full ${ (center.studentCount / center.packages.max_students) > 0.9 ? 'bg-red-500' : 'bg-green-500' }`} 
+                                                                    style={{ width: `${Math.min((center.studentCount / center.packages.max_students) * 100, 100)}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 {/* 📊 استهلاك الداتا */}
                                                 <td className="px-6 py-4">
                                                     <div className="flex flex-col gap-1">
