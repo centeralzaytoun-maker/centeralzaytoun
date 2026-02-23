@@ -244,10 +244,10 @@ export default function DebtsPage() {
                 <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" />
               </Link>
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <span className="bg-red-600/10 text-red-600 text-[10px] font-black px-3 py-1 rounded-full border border-red-100 uppercase tracking-tighter">Financial Risks</span>
                 </div>
-                <h1 className="text-3xl md:text-4xl font-black text-slate-900 leading-none">سجل المديونيات <span className="text-red-600">والدفعات المتأخرة</span></h1>
+                <h1 className="text-3xl md:text-5xl font-black text-slate-900 leading-tight">سجل المديونيات <br className="md:hidden" /> <span className="text-red-600">والدفعات المتأخرة</span></h1>
               </div>
             </div>
 
