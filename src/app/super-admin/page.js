@@ -243,7 +243,8 @@ export default function SuperAdminDashboard() {
             { id: 'page_super_admin', name: 'لوحة القيادة العليا (Super Admin)', description: 'الوصول لإدارة المنصة، الباقات، والتحكم الكلي في السناتر' },
             { id: 'page_admin_dashboard', name: 'لوحة تحكم الإدارة (Analytics)', description: 'الوصول للإحصائيات والرسوم البيانية المتقدمة' },
             { id: 'page_staff_dashboard', name: 'لوحة تحكم الموظفين', description: 'الوصول للملخص السريع للموظفين' },
-            { id: 'page_sessions', name: 'إدارة الحصص والمجموعات', description: 'الوصول لإدارة الحصص، المدرسين، المجموعات، والمواد' },
+            { id: 'page_sessions', name: 'إدارة الحصص والمجموعات', description: 'الوصول لإدارة الحصص، المجموعات، والمواد' },
+            { id: 'page_instructors', name: 'إدارة المدرسين', description: 'إضافة وإدارة السادة المدرسين والأساتذة' },
             { id: 'page_students', name: 'إدارة الطلاب ومتابعتهم', description: 'الوصول لصفحة الطلاب وبياناتهم المالية والأساسية' },
             { id: 'page_exams', name: 'الاختبارات والنتائج', description: 'الوصول لصفحة رصد الدرجات وإدارة الامتحانات' },
             { id: 'page_schedule', name: 'الجدول الدراسي', description: 'الوصول لجدول المواعيد الأسبوعي' },
@@ -268,7 +269,17 @@ export default function SuperAdminDashboard() {
         try {
             const { error } = await supabaseBrowser.from('features').upsert(newFeatures);
             if (error) throw error;
-            toast.success('✅ تم تحديث قائمة المميزات بنجاح!');
+            
+            // 🛡️ تحديث جدول الصلاحيات (Permissions)
+            const permissionsToInsert = newFeatures.map(f => ({
+                key: f.id,
+                name: f.name,
+                description: f.description
+            }));
+            
+            await supabaseBrowser.from('permissions').upsert(permissionsToInsert);
+
+            toast.success('✅ تم تحديث قائمة المميزات والصلاحيات بنجاح!');
             fetchFeatures();
         } catch (error) {
             toast.error('❌ فشل التحديث: ' + error.message);
