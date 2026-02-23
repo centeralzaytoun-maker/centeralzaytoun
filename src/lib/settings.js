@@ -8,7 +8,7 @@ export const getCenterSettings = async (centerId) => {
         center_name: 'Smart Center',
         logo_url: null,
         primary_color: '#2563eb',
-        description: 'مركزك التعليمي الأول',
+        description: '',
         center_type: 'center',
       };
     }
@@ -25,7 +25,7 @@ export const getCenterSettings = async (centerId) => {
         center_name: 'Smart Center',
         logo_url: null,
         primary_color: '#2563eb',
-        description: 'مركزك التعليمي الأول',
+        description: '',
         center_type: 'center',
       };
     }
@@ -51,7 +51,7 @@ export const getCenterSettings = async (centerId) => {
 
       // ── الإعدادات الأساسية ──
       primary_color: data?.primary_color || '#2563eb',
-      description: data?.address || 'مركزك التعليمي الأول',
+      description: data?.address || (isInstructor ? (data?.instructor_title || '') : 'مركزك التعليمي الأول'),
       phone: data?.center_phone || '',
       address: data?.address || '',
       next_student_code: data?.next_student_code || 100000,
@@ -74,7 +74,7 @@ export const getCenterSettings = async (centerId) => {
       center_name: 'Smart Center',
       logo_url: null,
       primary_color: '#2563eb',
-      description: 'مركزك التعليمي الأول',
+      description: '',
       center_type: 'center',
       is_instructor_mode: false,
     };

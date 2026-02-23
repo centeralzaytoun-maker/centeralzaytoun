@@ -34,7 +34,7 @@ export default function StudentDashboard() {
     name: 'Smart Center',
     logo: 'SC',
     logo_url: null,
-    description: 'مركزك التعليمي الأول',
+    description: '',
     primary_color: '#2563eb',
     phone: '',
     address: ''
