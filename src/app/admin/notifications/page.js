@@ -625,6 +625,11 @@ export default function AdminNotificationsPage() {
                                                     <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${item.status === 'sent' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600 animate-pulse'}`}>
                                                         {item.status === 'sent' ? 'تم الإرسال' : 'مجدول'}
                                                     </span>
+                                                    {item.status === 'sent' && (
+                                                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${item.seen_by?.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                                                            {item.seen_by?.length > 0 ? <><FaCheckDouble size={8}/> مقروء</> : 'لم يُقرأ'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                             <span className="text-[8px] font-bold text-slate-300 mt-1 uppercase tracking-tighter">
