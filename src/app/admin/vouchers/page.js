@@ -39,6 +39,10 @@ export default function VouchersPage() {
   const [copiedCode, setCopiedCode] = useState(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  
+  // 📄 Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
 
   useEffect(() => {
     if (centerId) {
@@ -98,6 +102,18 @@ export default function VouchersPage() {
       return matchesSearch && matchesStatus && matchesGrade && matchesCourse;
     });
   }, [vouchers, searchTerm, statusFilter, listGrade, listCourseId]);
+
+  const paginatedVouchers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredVouchers.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredVouchers, currentPage]);
+
+  const totalPages = Math.ceil(filteredVouchers.length / itemsPerPage);
+
+  // Reset to first page when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, listGrade, listCourseId]);
 
   const generateVouchers = async () => {
     if (!selectedCourseId || count < 1) return toast.error('يرجى اختيار مادة وتحديد العدد');
@@ -484,7 +500,7 @@ export default function VouchersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredVouchers.map((v) => (
+                {paginatedVouchers.map((v) => (
                   <tr key={v.id} className={`hover:bg-slate-50/80 transition-all group ${v.is_used ? 'opacity-80' : ''}`}>
                     <td className="px-8 py-5">
                       {!v.is_used && (
@@ -572,6 +588,48 @@ export default function VouchersPage() {
               </div>
             )}
           </div>
+
+          {/* 📄 Pagination Footer */}
+          {totalPages > 1 && (
+            <div className="bg-slate-50 p-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                عرض {paginatedVouchers.length} من أصل {filteredVouchers.length} كود
+              </span>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                >
+                  <FaArrowLeft className="rotate-180" />
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${
+                        currentPage === i + 1 
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+                          : 'bg-white border border-slate-200 text-slate-400 hover:bg-slate-50'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  )).slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))}
+                </div>
+
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                >
+                  <FaArrowLeft />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
