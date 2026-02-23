@@ -21,6 +21,7 @@ export default function VouchersPage() {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [centerSettings, setCenterSettings] = useState(null);
   
   // 🔍 Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,15 +49,18 @@ export default function VouchersPage() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [stagesRes, coursesRes, vouchersRes] = await Promise.all([
+      const { getCenterSettings } = await import('../../../lib/settings');
+      const [stagesRes, coursesRes, vouchersRes, settings] = await Promise.all([
         supabaseBrowser.from('educational_stages').select('*').eq('center_id', centerId).order('sort_order', { ascending: true }),
         supabaseBrowser.from('courses').select('id, name, grade, instructors(name)').eq('center_id', centerId),
-        supabaseBrowser.from('recharge_codes').select('*, courses(name, grade), students(name)').eq('center_id', centerId).order('created_at', { ascending: false })
+        supabaseBrowser.from('recharge_codes').select('*, courses(name, grade), students(name)').eq('center_id', centerId).order('created_at', { ascending: false }),
+        getCenterSettings(centerId)
       ]);
 
       setStages(stagesRes.data || []);
       setCourses(coursesRes.data || []);
       setVouchers(vouchersRes.data || []);
+      setCenterSettings(settings);
     } catch (error) {
       toast.error('خطأ في تحميل البيانات');
     } finally {
@@ -180,20 +184,26 @@ export default function VouchersPage() {
             body { font-family: 'Cairo', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f8fafc; }
             .card { background: white; border: 4px solid #2563eb; padding: 40px; border-radius: 30px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.1); width: 400px; position: relative; overflow: hidden; }
             .card::before { content: ""; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: #2563eb; opacity: 0.1; clip-path: circle(50% at 100% 0); }
-            .logo { color: #2563eb; font-weight: 900; font-size: 24px; margin-bottom: 20px; }
-            .course { font-size: 18px; color: #64748b; margin-bottom: 10px; font-weight: 700; }
-            .code-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
-            .code { font-size: 32px; font-weight: 900; color: #1e293b; background: #eff6ff; padding: 15px; border-radius: 15px; border: 2px dashed #bfdbfe; font-family: monospace; letter-spacing: 2px; }
-            .footer { margin-top: 30px; font-size: 12px; color: #94a3b8; }
+            .branding { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 25px; }
+            .branding img { width: 60px; height: 60px; object-fit: contain; }
+            .branding .center-name { font-weight: 900; font-size: 14px; color: #64748b; text-transform: uppercase; }
+            .logo { color: #2563eb; font-weight: 900; font-size: 18px; line-height: 1; }
+            .course { font-size: 20px; color: #1e293b; margin-bottom: 10px; font-weight: 900; }
+            .code-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
+            .code { font-size: 32px; font-weight: 900; color: #2563eb; background: #eff6ff; padding: 15px; border-radius: 15px; border: 2px dashed #bfdbfe; font-family: monospace; letter-spacing: 2px; }
+            .footer { margin-top: 30px; font-size: 10px; color: #94a3b8; font-weight: bold; }
           </style>
         </head>
         <body onload="window.print(); window.close();">
           <div class="card">
-            <div class="logo">⚡ CLASORA VOUCHER</div>
+            <div class="branding">
+              ${centerSettings?.logo_url ? `<img src="${centerSettings.logo_url}" alt="logo" />` : ''}
+              <div class="center-name">${centerSettings?.name || ''}</div>
+            </div>
             <div class="course">${voucher.courses?.name}</div>
             <div class="code-label">كود تفعيل الحصة / الكورس</div>
             <div class="code">${voucher.code}</div>
-            <div class="footer">صالح للاستخدام لمرة واحدة فقط</div>
+            <div class="footer">⚡ نظام الـ Voucher المدعوم من CLASORA</div>
           </div>
         </body>
       </html>
@@ -215,12 +225,15 @@ export default function VouchersPage() {
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap');
             body { font-family: 'Cairo', sans-serif; background: white; margin: 0; padding: 20px; }
-            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-            .card { border: 2px solid #e2e8f0; padding: 20px; border-radius: 15px; text-align: center; position: relative; break-inside: avoid; }
-            .logo { color: #2563eb; font-weight: 900; font-size: 14px; margin-bottom: 5px; }
-            .course { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 5px; }
-            .grade { font-size: 10px; color: #94a3b8; margin-bottom: 10px; }
-            .code { font-size: 18px; font-weight: 900; background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px dashed #cbd5e1; font-family: monospace; }
+            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+            .card { border: 2px solid #f1f5f9; padding: 15px; border-radius: 15px; text-align: center; position: relative; break-inside: avoid; background: #fff; }
+            .branding { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; opacity: 0.8; }
+            .branding img { width: 25px; height: 25px; object-fit: contain; }
+            .branding .center-name { font-weight: 900; font-size: 10px; color: #64748b; }
+            .course { font-size: 13px; font-weight: 900; color: #1e293b; margin-bottom: 2px; }
+            .grade { font-size: 9px; color: #94a3b8; margin-bottom: 8px; font-weight: bold; }
+            .code { font-size: 18px; font-weight: 900; background: #eff6ff; padding: 8px; border-radius: 10px; border: 1px dashed #bfdbfe; font-family: monospace; color: #2563eb; }
+            .legal { font-size: 8px; color: #cbd5e1; margin-top: 8px; }
             @media print {
               @page { size: A4; margin: 1cm; }
               body { padding: 0; }
@@ -231,10 +244,14 @@ export default function VouchersPage() {
           <div class="grid">
             ${vouchersToPrint.map(v => `
               <div class="card">
-                <div class="logo">⚡ CLASORA VOUCHER</div>
+                <div class="branding">
+                  ${centerSettings?.logo_url ? `<img src="${centerSettings.logo_url}" alt="logo" />` : ''}
+                  <div class="center-name">${centerSettings?.name || ''}</div>
+                </div>
                 <div class="course">${v.courses?.name}</div>
                 <div class="grade">${v.courses?.grade || ''}</div>
                 <div class="code">${v.code}</div>
+                <div class="legal">⚡ CLASORA VOUCHER SYSTEM</div>
               </div>
             `).join('')}
           </div>
