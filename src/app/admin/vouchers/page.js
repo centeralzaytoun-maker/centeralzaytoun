@@ -1,3 +1,4 @@
+'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { supabaseBrowser } from '../../../lib/supabase';
 import { useAuth } from '../../../context/AuthContext';
