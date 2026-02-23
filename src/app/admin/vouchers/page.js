@@ -414,7 +414,7 @@ export default function VouchersPage() {
             >
               <option value="">كل المواد</option>
               {courses.filter(c => !listGrade || c.grade === listGrade).map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.name} - {c.instructors?.name || 'مجهول'}</option>
               ))}
             </select>
 
