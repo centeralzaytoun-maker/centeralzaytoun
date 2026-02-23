@@ -86,6 +86,7 @@ export default async function AdminLayout({ children }) {
         logoUrl={logoUrl}
         centerType={centerType}
         instructorTitle={instructorTitle}
+        instructorSubject={instructorSubject}
       />
       
       <main className="flex-1 overflow-x-hidden">

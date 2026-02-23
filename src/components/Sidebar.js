@@ -12,7 +12,7 @@ import {
   FaHeadset, FaFileInvoiceDollar, FaHome, FaTimes, FaMoneyCheckAlt, FaCrown
 } from 'react-icons/fa';
 
-export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', centerName = 'مركز تعليمي', logoUrl = null, centerType = 'center', instructorTitle = null }) {
+export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', centerName = 'مركز تعليمي', logoUrl = null, centerType = 'center', instructorTitle = null, instructorSubject = null }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -201,13 +201,15 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
             {/* Clear Text Section - No Overlap & Smooth Animation */}
             <div className={`flex flex-col justify-center transition-all duration-700 delay-100 ${(!isOpen && !isMobileOpen) ? 'md:w-0 md:opacity-0 md:hidden' : 'w-auto opacity-100 animate-in fade-in slide-in-from-right-5'}`}>
               <h1 className="font-black text-xl text-gray-900 leading-snug truncate max-w-[160px]">
-                {centerName}
+                {centerType === 'instructor' ? `أ/ ${centerName}` : centerName}
               </h1>
               <p 
                 style={{ color: primaryColor }}
-                className="text-[10px] font-black tracking-[0.25em] uppercase mt-1.5 opacity-90"
+                className="text-[10px] font-black tracking-[0.2em] uppercase mt-1.5 opacity-90 truncate max-w-[160px]"
               >
-                Smart Center
+                {centerType === 'instructor' && (instructorTitle || instructorSubject) 
+                  ? `${instructorTitle || ''}${instructorTitle && instructorSubject ? ' · ' : ''}${instructorSubject || ''}`
+                  : 'Smart Center'}
               </p>
             </div>
           </div>
