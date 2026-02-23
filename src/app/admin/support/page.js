@@ -5,7 +5,7 @@ import { supabaseBrowser } from '../../../lib/supabase';
 import { 
     FaPaperPlane, FaSearch, FaUserCircle, FaCheckDouble, 
     FaClock, FaCircle, FaSpinner, FaInbox, FaArrowLeft, FaEllipsisV, 
-    FaTrash, FaCheck, FaPhone, FaBook, FaInfoCircle, FaBolt, FaFilter, FaLayerGroup
+    FaTrash, FaCheck, FaPhone, FaBook, FaInfoCircle, FaBolt, FaFilter, FaLayerGroup, FaBell
 } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
