@@ -1,128 +1,143 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabaseBrowser } from '../../../lib/supabase';
 import { 
     FaPaperPlane, FaSearch, FaUserCircle, FaCheckDouble, 
-    FaClock, FaCircle, FaSpinner, FaInbox 
+    FaClock, FaCircle, FaSpinner, FaInbox, FaArrowLeft, FaEllipsisV, 
+    FaTrash, FaCheck, FaPhone, FaBook, FaInfoCircle, FaBolt, FaFilter, FaLayerGroup
 } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function SupportChatPage() {
     const { centerId, user } = useAuth();
     
-    const [tickets, setTickets] = useState([]); // قائمة المحادثات
-    const [selectedTicket, setSelectedTicket] = useState(null); // المحادثة المفتوحة حالياً
-    const [messages, setMessages] = useState([]); // رسايل المحادثة المفتوحة
-    const [newMessage, setNewMessage] = useState(''); // النص اللي بتكتبه
+    // 📊 State Management
+    const [tickets, setTickets] = useState([]);
+    const [selectedTicket, setSelectedTicket] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
-    const [showMobileChat, setShowMobileChat] = useState(false); // 🔥 For mobile responsiveness
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = useState('all'); // all, unread, open
+    const [showInfoSidebar, setShowInfoSidebar] = useState(true);
+    const [showMobileChat, setShowMobileChat] = useState(false);
+    
+    // ⚙️ Chat Engine Refs
     const messagesEndRef = useRef(null); 
-
-    // WhatsApp Features State
-    const [isParentTyping, setIsParentTyping] = useState(false);
     const typingTimeoutRef = useRef(null);
     const currentChannelRef = useRef(null); 
+    const lastTypingSignalRef = useRef(0);
+    const processingIds = useRef(new Set());
+
+    // 🏎️ UI States
+    const [isParentTyping, setIsParentTyping] = useState(false);
     const [isSending, setIsSending] = useState(false);
-    const lastTypingSignalRef = useRef(0); // 🔥 لمنع إغراق السيرفر بالإشارات 
-    // ---------------------------
 
-    // 1️⃣ تحميل البيانات الأولية
+    // 🧠 Quick Replies (Canned Responses)
+    const quickReplies = [
+        "أهلاً بك، كيف يمكنني مساعدتك؟",
+        "تم حل المشكلة، هل لديك استفسار آخر؟",
+        "جاري التحقق من الأمر، برجاء الانتظار قليلاً.",
+        "سيتم التواصل معك هاتفياً لمزيد من التفاصيل.",
+        "تم تحديث البيانات بنجاح."
+    ];
+
+    // 📥 Initial Data Fetch
     useEffect(() => {
-        const initData = async () => {
-            if (!centerId) return;
-            await fetchTickets();
-            setLoading(false);
-        };
-
         if (centerId) {
-            initData();
+            fetchInitialData();
+            setupRealtimeSubscriptions();
         }
+    }, [centerId]);
 
-        // 🔥 Realtime Subscription لقائمة التذاكر
-        // أي حد يبعت رسالة جديدة، القائمة تتحدث فوراً
+    const fetchInitialData = async () => {
+        setLoading(true);
+        try {
+            await fetchTickets();
+        } catch (e) {
+            toast.error('خطأ في تحميل المحادثات');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchTickets = async () => {
+        if (!centerId) return;
+        const { data } = await supabaseBrowser
+            .from('support_tickets')
+            .select(`*, students (id, name, grade, phone, group_ids)`)
+            .eq('center_id', centerId)
+            .order('last_message_at', { ascending: false });
+        setTickets(data || []);
+    };
+
+    const setupRealtimeSubscriptions = () => {
         const ticketsChannel = supabaseBrowser
-            .channel('public:support_tickets')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
-                if (centerId) fetchTickets(); // تحديث القائمة
+            .channel('public:support_tickets_admin')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets', filter: `center_id=eq.${centerId}` }, () => {
+                fetchTickets();
             })
             .subscribe();
 
         return () => { supabaseBrowser.removeChannel(ticketsChannel); };
-    }, [centerId]);
-
-    // 2️⃣ جلب قائمة التذاكر مرتبة بالأحدث
-    const fetchTickets = async () => {
-        if (!centerId) return;
-        
-        const { data } = await supabaseBrowser
-            .from('support_tickets')
-            .select(`
-                *,
-                students (id, name, grade)
-            `)
-            .eq('center_id', centerId)
-            .order('last_message_at', { ascending: false }); // الأحدث فوق
-        setTickets(data || []);
     };
 
-    // 3️⃣ عند اختيار تذكرة (فتح الشات)
+    // 💬 Handle Ticket Selection & Messages
     useEffect(() => {
         if (!selectedTicket) return;
 
-        // هات الرسايل القديمة
-        const fetchMessages = async () => {
-            if (!centerId) return;
-            
+        const fetchMessagesAndSubscribe = async () => {
+            // 1. Fetch historical messages
             const { data } = await supabaseBrowser
                 .from('chat_messages')
                 .select('*')
                 .eq('ticket_id', selectedTicket.id)
-                .eq('center_id', centerId)
-                .order('created_at', { ascending: true }); // من القديم للجديد
+                .order('created_at', { ascending: true });
+            
             setMessages(data || []);
             scrollToBottom();
-        };
 
-        fetchMessages();
+            // 2. Clear unread notifications for this ticket
+            markTicketAsRead(selectedTicket.id);
 
-        // 🔥 Realtime Subscription للرسايل والإشارات (Typing / Status)
-        const chatChannel = supabaseBrowser.channel(`ticket:${selectedTicket.id}`);
-        currentChannelRef.current = chatChannel;
+            // 3. Setup Ticket Realtime Room
+            if (currentChannelRef.current) supabaseBrowser.removeChannel(currentChannelRef.current);
+            
+            const chatChannel = supabaseBrowser.channel(`ticket_room:${selectedTicket.id}`);
+            currentChannelRef.current = chatChannel;
 
-        chatChannel
-            .on('postgres_changes', { 
-                event: '*', // Listen to INSERT and UPDATE
-                schema: 'public', 
-                table: 'chat_messages', 
-                filter: `ticket_id=eq.${selectedTicket.id}` 
-            }, (payload) => {
-                if (payload.eventType === 'INSERT') {
+            chatChannel
+                .on('postgres_changes', { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'chat_messages', 
+                    filter: `ticket_id=eq.${selectedTicket.id}` 
+                }, (payload) => {
                     const newMsg = payload.new;
                     setMessages(prev => {
-                        if (prev.some(m => m.id === newMsg.id || (newMsg.client_side_id && m.client_side_id === newMsg.client_side_id))) {
-                            return prev;
-                        }
+                        if (prev.some(m => m.id === newMsg.id || (newMsg.client_side_id && m.client_side_id === newMsg.client_side_id))) return prev;
                         return [...prev, newMsg];
                     });
                     scrollToBottom();
                     if (newMsg.sender_type !== 'staff') {
                         new Audio('/notification.mp3').play().catch(() => {});
+                        markTicketAsRead(selectedTicket.id);
                     }
-                } else if (payload.eventType === 'UPDATE') {
-                    const updatedMsg = payload.new;
-                    setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
-                }
-            })
-            .on('broadcast', { event: 'typing' }, (payload) => {
-                if (payload.payload.typing) {
-                    setIsParentTyping(true);
-                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                    typingTimeoutRef.current = setTimeout(() => setIsParentTyping(false), 3000);
-                }
-            })
-            .subscribe((status) => {
-                console.log(`🔌 [Realtime] حالة قناة التذكرة ${selectedTicket.id}:`, status);
-            });
+                })
+                .on('broadcast', { event: 'typing' }, (payload) => {
+                    if (payload.payload.typing) {
+                        setIsParentTyping(true);
+                        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                        typingTimeoutRef.current = setTimeout(() => setIsParentTyping(false), 3000);
+                    }
+                })
+                .subscribe();
+        };
+
+        fetchMessagesAndSubscribe();
 
         return () => { 
             if (currentChannelRef.current) {
@@ -130,58 +145,35 @@ export default function SupportChatPage() {
                 currentChannelRef.current = null;
             }
         };
-    }, [selectedTicket]);
+    }, [selectedTicket?.id]);
 
-    // ✅ تحديث حالة القراءة والنزول لأسفل
-    useEffect(() => {
-        if (selectedTicket && messages.length > 0) {
-            // أ) تعليم الرسائل كمقروءة
-            const markAsRead = async () => {
-                if (!centerId) return;
-                
-                await supabaseBrowser
-                    .from('chat_messages')
-                    .update({ is_read: true })
-                    .eq('ticket_id', selectedTicket.id)
-                    .eq('center_id', centerId)
-                    .eq('sender_type', 'student')
-                    .eq('is_read', false);
-            };
-            markAsRead();
+    const markTicketAsRead = async (ticketId) => {
+        await supabaseBrowser
+            .from('chat_messages')
+            .update({ is_read: true })
+            .eq('ticket_id', ticketId)
+            .eq('sender_type', 'student')
+            .eq('is_read', false);
+    };
 
-            // ب) النزول لأسفل
-            scrollToBottom();
-        }
-    }, [selectedTicket, messages]);
-
-    // دالة النزول لآخر الشات
     const scrollToBottom = () => {
         setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
     };
 
-    // ⌨️ إشارة الأدمن يكتب الآن (مع حماية Throttling)
+    // ⌨️ Actions
     const sendTypingSignal = () => {
         if (!selectedTicket || !currentChannelRef.current) return;
-        
         const now = Date.now();
         if (now - lastTypingSignalRef.current < 2000) return; 
-
         lastTypingSignalRef.current = now;
-        console.log("⌨️ [Typing] إرسال إشارة 'الأدمن يكتب'...");
-        
-        currentChannelRef.current.send({
-            type: 'broadcast',
-            event: 'typing',
-            payload: { typing: true }
-        });
+        currentChannelRef.current.send({ type: 'broadcast', event: 'typing', payload: { typing: true } });
     };
 
-    // 4️⃣ إرسال رسالة جديدة
     const sendMessage = async (e) => {
-        e.preventDefault();
-        if (!newMessage.trim() || !user || !selectedTicket) return;
+        if (e) e.preventDefault();
+        if (!newMessage.trim() || !user || !selectedTicket || isSending) return;
 
         const msgText = newMessage;
         setNewMessage(''); 
@@ -213,224 +205,386 @@ export default function SupportChatPage() {
                 center_id: centerId,
                 client_side_id: tempId
             });
-            
             if (error) throw error;
-
-            // إشارة فورية (WhatsApp Logic)
-            if (currentChannelRef.current) {
-                await currentChannelRef.current.send({
-                    type: 'broadcast',
-                    event: 'admin_reply',
-                    payload: optimisticMsg
-                });
-            }
         } catch (error) {
-            console.error("❌ Send Error:", error);
+            toast.error('فشل إرسال الرسالة');
             setMessages(prev => prev.filter(m => m.client_side_id !== tempId));
         } finally {
             setIsSending(false);
         }
     };
 
-    // 🔥 5️⃣ دالة حذف التذكرة نهائياً عند الإغلاق
     const closeTicket = async () => {
         if (!selectedTicket) return;
-        
-        const confirmDelete = window.confirm("سيتم إغلاق المحادثة وحذفها نهائياً. هل أنت متأكد؟");
-        if (!confirmDelete) return;
+        const confirm = window.confirm("هل أنت متأكد من إغلاق وحذف هذه المحادثة؟");
+        if (!confirm) return;
 
         try {
-            // 1. حذف الرسائل أولاً (لو مش CASCADE)
             await supabaseBrowser.from('chat_messages').delete().eq('ticket_id', selectedTicket.id);
-
-            // 2. حذف التذكرة
-            const { error } = await supabaseBrowser
-                .from('support_tickets')
-                .delete()
-                .eq('id', selectedTicket.id);
-
+            const { error } = await supabaseBrowser.from('support_tickets').delete().eq('id', selectedTicket.id);
             if (error) throw error;
-
-            setTickets(prev => prev.filter(t => t.id !== selectedTicket.id));
-            setSelectedTicket(null); 
             
+            setTickets(prev => prev.filter(t => t.id !== selectedTicket.id));
+            setSelectedTicket(null);
+            setShowMobileChat(false);
+            toast.success('تم إغلاق المحادثة بنجاح');
         } catch (error) {
-            console.error("Error deleting ticket:", error);
-            alert("حدث خطأ أثناء الحذف");
+            toast.error('خطأ أثناء الإغلاق');
         }
     };
 
-    // التحقق من وجود centerId قبل عرض المحتوى
-    if (!centerId) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 text-xl font-bold text-gray-400">
-                <div className="text-center">
-                    <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4 animate-pulse"></div>
-                    <p>جاري التحقق من صلاحيات الدخول...</p>
-                </div>
+    // 🔍 Filtering Logic
+    const filteredTickets = useMemo(() => {
+        return tickets.filter(t => {
+            const matchesSearch = t.students?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesTab = activeTab === 'all' || 
+                              (activeTab === 'unread' && t.unread_count > 0) ||
+                              (activeTab === 'open' && t.status === 'open');
+            return matchesSearch && matchesTab;
+        });
+    }, [tickets, searchTerm, activeTab]);
+
+    if (!centerId) return (
+        <div className="h-screen bg-slate-50 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+                <p className="text-slate-400 font-bold">جاري المصادقة...</p>
             </div>
-        );
-    }
+        </div>
+    );
 
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden" dir="rtl">
-            
-            {/* 🟢 القائمة الجانبية (Sidebar) */}
-            <div className={`w-full md:w-1/3 border-l border-gray-200 bg-white flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
-                {/* Header */}
-                <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                    <h2 className="font-black text-xl text-gray-800 flex items-center gap-2">
-                        <FaInbox className="text-blue-600"/> المحادثات
-                    </h2>
-                    <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">
-                        {tickets.length} نشطة
-                    </span>
-                </div>
+        <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-cairo" dir="rtl">
+            <Toaster position="top-center" />
 
-                {/* Search (شكل بس حالياً) */}
-                <div className="p-3">
-                    <div className="relative">
-                        <FaSearch className="absolute right-3 top-3 text-gray-400 text-sm"/>
-                        <input type="text" placeholder="بحث عن ولي أمر..." className="w-full bg-gray-100 p-2 pr-9 rounded-xl text-sm outline-none focus:ring-2 ring-blue-100 transition-all"/>
+            {/* 📁 Sidebar: Ticket List */}
+            <div className={`w-full md:w-[380px] lg:w-[420px] bg-white border-l border-slate-200 flex flex-col z-20 shadow-xl transition-all ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+                <div className="p-6 border-b border-slate-100 bg-white sticky top-0">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                <FaInbox size={18} />
+                            </div>
+                            <h2 className="text-xl font-black text-slate-800">الدعم الفني</h2>
+                        </div>
+                        <div className="bg-blue-50 text-blue-600 text-[10px] font-black px-3 py-1 rounded-full border border-blue-100 uppercase tracking-tighter">
+                            {tickets.length} تذكرة
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="relative group">
+                            <FaSearch className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-all" />
+                            <input 
+                                type="text" 
+                                placeholder="بحث عن اسم الطالب..." 
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-slate-50 border-none h-12 pr-12 pl-4 rounded-2xl text-xs font-black outline-none focus:ring-2 ring-blue-500/10 transition-all"
+                            />
+                        </div>
+
+                        <div className="flex gap-2 p-1 bg-slate-50 rounded-xl border border-slate-100">
+                            {[
+                                { id: 'all', label: 'الكل', icon: <FaLayerGroup /> },
+                                { id: 'unread', label: 'لم يُقرأ', icon: <FaBell /> },
+                                { id: 'open', label: 'نشط', icon: <FaBolt /> },
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm border border-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    {tab.icon} {tab.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                {/* Tickets List */}
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {loading ? (
-                        <div className="flex justify-center p-10"><FaSpinner className="animate-spin text-blue-600"/></div>
-                    ) : tickets.map(ticket => (
-                        <div 
+                        <div className="flex flex-col items-center justify-center p-20 gap-3 opacity-20">
+                            <FaSpinner className="animate-spin text-3xl"/>
+                            <p className="text-xs font-black">جاري التحميل...</p>
+                        </div>
+                    ) : filteredTickets.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center p-20 gap-4 opacity-30 text-center">
+                            <FaInbox size={48} />
+                            <p className="text-sm font-black">لا توجد محادثات مطابقة</p>
+                        </div>
+                    ) : filteredTickets.map(ticket => (
+                        <motion.div 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
                             key={ticket.id}
                             onClick={() => {
                                 setSelectedTicket(ticket);
                                 setShowMobileChat(true);
                             }}
-                            className={`p-4 border-b cursor-pointer transition-all hover:bg-blue-50 ${selectedTicket?.id === ticket.id ? 'bg-blue-50 border-r-4 border-r-blue-600' : ''}`}
+                            className={`p-5 cursor-pointer transition-all border-b border-slate-50 relative group ${selectedTicket?.id === ticket.id ? 'bg-blue-50/50' : 'hover:bg-slate-50/80'}`}
                         >
-                            <div className="flex justify-between items-start mb-1">
-                                <h3 className="font-bold text-sm text-gray-900">{ticket.students?.name}</h3>
-                                <span className="text-[10px] text-gray-400">
-                                    {new Date(ticket.last_message_at).toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})}
-                                </span>
+                            {selectedTicket?.id === ticket.id && <div className="absolute left-0 top-0 w-1.5 h-full bg-blue-600 rounded-r-full shadow-[2px_0_10px_rgba(37,99,235,0.4)]"></div>}
+                            
+                            <div className="flex items-center gap-4">
+                                <div className="relative">
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black shadow-inner ${selectedTicket?.id === ticket.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-white transition-all'}`}>
+                                        {ticket.students?.name?.[0]}
+                                    </div>
+                                    {ticket.status === 'open' && (
+                                        <div className="absolute -bottom-1 -left-1 w-4 h-4 bg-emerald-500 border-4 border-white rounded-full"></div>
+                                    )}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <h3 className="font-black text-sm text-slate-800 truncate">{ticket.students?.name}</h3>
+                                        <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap mr-2">
+                                            {new Date(ticket.last_message_at).toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 truncate font-bold opacity-80 mb-2">
+                                        {ticket.subject || 'بدء محادثة دعم جديدة...'}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[8px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black border border-slate-200 uppercase tracking-tighter">
+                                            {ticket.students?.grade}
+                                        </span>
+                                        {ticket.unread_count > 0 && (
+                                            <span className="bg-red-500 text-white text-[8px] font-black w-5 h-5 flex items-center justify-center rounded-full animate-bounce shadow-lg shadow-red-200">
+                                                {ticket.unread_count}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-500 line-clamp-1 w-3/4">
-                                    {ticket.subject || 'اضغط للمراسلة...'}
-                                </p>
-                                {ticket.status === 'open' && <FaCircle className="text-[8px] text-green-500"/>}
-                            </div>
-                            <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded mt-2 inline-block">
-                                {ticket.students?.grade}
-                            </span>
-                        </div>
+                        </motion.div>
                     ))}
                 </div>
             </div>
 
-            {/* 🔵 منطقة الشات (Chat Area) */}
-            <div className={`flex-1 flex flex-col bg-[#eef1f6] ${showMobileChat ? 'flex' : 'hidden md:flex'}`}>
+            {/* 💬 Main Chat View */}
+            <div className={`flex-1 flex flex-col bg-[#f0f4f8] relative ${showMobileChat ? 'flex' : 'hidden md:flex'}`}>
                 {selectedTicket ? (
                     <>
-                        {/* Chat Header */}
-                        <div className="p-4 bg-white border-b flex justify-between items-center shadow-sm z-10">
-                            <div className="flex items-center gap-3">
-                                {/* Back Button for Mobile */}
+                        {/* 🏢 Chat Header */}
+                        <div className="h-[80px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-30">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
                                 <button 
                                     onClick={() => setShowMobileChat(false)}
-                                    className="md:hidden h-10 w-10 bg-gray-50 text-gray-500 rounded-xl flex items-center justify-center border border-gray-100"
+                                    className="md:hidden w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-all shrink-0"
                                 >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
+                                    <FaArrowLeft />
                                 </button>
-                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 shrink-0">
-                                    <FaUserCircle size={24}/>
-                                </div>
-                                <div className="truncate">
-                                    <h3 className="font-bold text-gray-800 text-sm md:text-base truncate">{selectedTicket.students?.name}</h3>
-                                    <p className="text-[10px] md:text-xs text-green-600 flex items-center gap-1">
-                                        <FaCircle size={6}/> متصل (ولي الأمر)
-                                    </p>
-                                </div>
-                            </div>
-                            {/* 🔥 تم ربط الزرار بدالة الإغلاق */}
-                            <button 
-                                onClick={closeTicket}
-                                className="text-[10px] md:text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 font-bold transition-all shrink-0"
-                            >
-                                إغلاق
-                            </button>
-                        </div>
-
-                        {/* Messages Body */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4" style={{backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")', opacity: 0.95}}>
-                            {messages.map((msg, index) => {
-                                const isStaff = msg.sender_type === 'staff';
-                                return (
-                                    <div key={index} className={`flex ${isStaff ? 'justify-start' : 'justify-end'}`}>
-                                        <div className={`max-w-[75%] p-3.5 px-5 rounded-[1.5rem] shadow-sm relative text-sm font-medium leading-relaxed ${
-                                            isStaff 
-                                            ? 'bg-blue-600 text-white rounded-tr-none shadow-md' 
-                                            : 'bg-white text-gray-800 rounded-tl-none border border-gray-100'
-                                        }`}>
-                                            {msg.message_text}
-                                            <div className={`text-[9px] mt-1.5 flex items-center gap-1.5 ${isStaff ? 'justify-start text-blue-100/80' : 'justify-end text-gray-400'}`}>
-                                                {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                                {isStaff && (
-                                                    <FaCheckDouble className={`text-[11px] transition-colors duration-500 ${msg.is_read ? 'text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.5)]' : 'text-blue-300/50'}`}/>
-                                                )}
-                                            </div>
+                                
+                                <div className="flex items-center gap-3 truncate">
+                                    <div className="w-11 h-11 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden">
+                                        <FaUserCircle size={28}/>
+                                    </div>
+                                    <div className="truncate">
+                                        <h3 className="font-black text-slate-800 text-base leading-none mb-1.5 truncate">{selectedTicket.students?.name}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">متاح للمراسلة</span>
                                         </div>
                                     </div>
-                                );
-                            })}
-                            <div ref={messagesEndRef} />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setShowInfoSidebar(!showInfoSidebar)}
+                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${showInfoSidebar ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-50'}`}
+                                >
+                                    <FaInfoCircle size={18} />
+                                </button>
+                                <button 
+                                    onClick={closeTicket}
+                                    className="px-4 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-black shadow-sm border border-red-100 hover:bg-red-600 hover:text-white transition-all transform active:scale-95"
+                                >
+                                    إنهاء المحادثة
+                                </button>
+                            </div>
                         </div>
 
-                        {/* Input Area */}
-                        <div className="p-4 bg-white border-t relative">
-                            {/* Typing Indicator */}
-                            {isParentTyping && (
-                                <div className="absolute -top-7 left-8 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-blue-50 flex items-center gap-2 animate-bounce shadow-sm">
-                                    <div className="flex gap-1">
-                                        <div className="w-1 h-1 bg-green-500 rounded-full"></div>
-                                        <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
-                                        <div className="w-1 h-1 bg-green-500 rounded-full"></div>
-                                    </div>
-                                    <span className="text-[10px] font-bold text-green-600">ولي الأمر يكتب الآن...</span>
+                        {/* ✉️ Messages Content */}
+                        <div className="flex-1 flex overflow-hidden">
+                            <div className="flex-1 flex flex-col bg-opacity-70 backdrop-blur-3xl relative overflow-hidden" 
+                                 style={{
+                                     backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232563eb' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                                 }}>
+                                
+                                <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 custom-scrollbar">
+                                    <AnimatePresence mode="popLayout">
+                                        {messages.map((msg, idx) => {
+                                            const isStaff = msg.sender_type === 'staff';
+                                            return (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    key={msg.id || idx} 
+                                                    className={`flex ${isStaff ? 'justify-start' : 'justify-end'}`}
+                                                >
+                                                    <div className={`max-w-[85%] md:max-w-[70%] group relative`}>
+                                                        <div className={`p-4 md:p-5 rounded-[2.5rem] text-sm font-bold leading-relaxed shadow-sm transition-all ${
+                                                            isStaff 
+                                                            ? 'bg-white text-slate-800 rounded-tr-none border border-slate-100 hover:shadow-md' 
+                                                            : 'bg-blue-600 text-white rounded-tl-none shadow-xl shadow-blue-200/50'
+                                                        }`}>
+                                                            {msg.message_text}
+                                                            
+                                                            <div className={`text-[9px] mt-2.5 flex items-center gap-2 ${isStaff ? 'justify-end text-slate-400' : 'justify-start text-blue-100/70'}`}>
+                                                                {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                {isStaff && (
+                                                                    <FaCheckDouble className={`text-[10px] ${msg.is_read ? 'text-blue-500' : 'text-slate-200'}`}/>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </AnimatePresence>
+                                    <div ref={messagesEndRef} />
                                 </div>
-                            )}
 
-                            <form onSubmit={sendMessage} className="flex items-center gap-3">
-                                <input 
-                                    type="text" 
-                                    value={newMessage}
-                                    onChange={(e) => {
-                                        setNewMessage(e.target.value);
-                                        sendTypingSignal();
-                                    }}
-                                    placeholder="اكتب ردك هنا..." 
-                                    className="flex-1 bg-gray-50 p-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white transition-all font-bold text-sm border border-gray-100"
-                                />
-                                <button 
-                                    type="submit" 
-                                    disabled={!newMessage.trim() || isSending}
-                                    className="bg-blue-600 text-white p-4 rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 disabled:opacity-50 active:scale-95"
-                                >
-                                    <FaPaperPlane className={newMessage ? "" : "opacity-50"}/>
-                                </button>
-                            </form>
+                                {/* ⌨️ Input Panel */}
+                                <div className="p-6 bg-white border-t border-slate-100 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-30">
+                                    {/* Quick Replies */}
+                                    <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
+                                        {quickReplies.map((reply, i) => (
+                                            <button 
+                                                key={i}
+                                                onClick={() => { setNewMessage(reply); }}
+                                                className="whitespace-nowrap bg-slate-50 hover:bg-blue-50 hover:text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black border border-slate-100 transition-all text-slate-500"
+                                            >
+                                                {reply}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Input Form */}
+                                    <div className="relative">
+                                        {/* Typing Label */}
+                                        <AnimatePresence>
+                                            {isParentTyping && (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: 10 }}
+                                                    className="absolute -top-12 right-0 bg-emerald-50 text-emerald-600 border border-emerald-100 px-4 py-1.5 rounded-full flex items-center gap-3 shadow-sm"
+                                                >
+                                                    <div className="flex gap-1">
+                                                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce"></div>
+                                                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                                                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                                                    </div>
+                                                    <span className="text-[10px] font-black">ولي الأمر يكتب الآن...</span>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+
+                                        <form onSubmit={sendMessage} className="flex gap-4">
+                                            <div className="flex-1 relative">
+                                                <input 
+                                                    type="text" 
+                                                    value={newMessage}
+                                                    onChange={(e) => {
+                                                        setNewMessage(e.target.value);
+                                                        sendTypingSignal();
+                                                    }}
+                                                    placeholder="اكتب ردك هنا للعضو..." 
+                                                    className="w-full h-16 bg-slate-50 border-none rounded-[2rem] px-8 text-sm font-bold outline-none focus:ring-4 ring-blue-500/5 focus:bg-white transition-all"
+                                                />
+                                            </div>
+                                            <motion.button 
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                type="submit" 
+                                                disabled={!newMessage.trim() || isSending}
+                                                className="w-16 h-16 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center shadow-xl shadow-slate-200 disabled:opacity-50 transition-all"
+                                            >
+                                                {isSending ? <FaSpinner className="animate-spin" /> : <FaPaperPlane size={20} className={newMessage ? "text-blue-400" : "opacity-30"}/>}
+                                            </motion.button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ℹ️ Info Sidebar (Desktop Only) */}
+                            <AnimatePresence>
+                                {showInfoSidebar && (
+                                    <motion.div 
+                                        initial={{ width: 0, opacity: 0 }}
+                                        animate={{ width: 340, opacity: 1 }}
+                                        exit={{ width: 0, opacity: 0 }}
+                                        className="hidden xl:flex flex-col bg-white border-r border-slate-100 overflow-hidden shrink-0 shadow-lg"
+                                    >
+                                        <div className="p-8 text-center border-b border-slate-50">
+                                            <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] mx-auto mb-6 flex items-center justify-center text-3xl font-black text-slate-300 shadow-inner">
+                                                {selectedTicket.students?.name?.[0]}
+                                            </div>
+                                            <h4 className="font-black text-slate-800 text-lg mb-1">{selectedTicket.students?.name}</h4>
+                                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{selectedTicket.students?.grade}</p>
+                                        </div>
+
+                                        <div className="p-8 space-y-8">
+                                            <div className="space-y-4">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">بيانات التواصل</label>
+                                                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 group hover:border-blue-200 transition-all">
+                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm"><FaPhone size={14}/></div>
+                                                    <span className="text-sm font-black text-slate-700">{selectedTicket.students?.phone || 'غير مسجل'}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">المجموعة الحالية</label>
+                                                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-amber-500 shadow-sm"><FaBook size={14}/></div>
+                                                    <span className="text-xs font-black text-slate-700">طالب في {selectedTicket.students?.group_ids?.length || 0} مجموعات</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-blue-600 p-6 rounded-[2.5rem] text-white shadow-xl shadow-blue-100 relative overflow-hidden group">
+                                                <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-700"></div>
+                                                <h5 className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-80">سرعة الرد</h5>
+                                                <p className="text-xs font-bold leading-relaxed">أثبتت الإحصائيات أن الرد في أقل من 5 دقائق يزيد من معدل ثقة ولي الأمر بنسبة 80%</p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </>
                 ) : (
-                    // Empty State
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
-                        <FaPaperPlane size={64} className="mb-4 opacity-20"/>
-                        <p className="text-lg font-bold">اختر محادثة للبدء</p>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-20">
+                        <div className="w-40 h-40 bg-white rounded-[4rem] flex items-center justify-center text-slate-100 shadow-2xl shadow-blue-50 border border-slate-50 mb-10 group relative">
+                             <div className="absolute inset-0 bg-blue-600 rounded-[4rem] opacity-0 group-hover:opacity-10 scale-0 group-hover:scale-110 transition-all duration-700"></div>
+                             <FaInbox size={80} className="relative z-10 transition-transform duration-700 group-hover:rotate-12 group-hover:scale-110" />
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">مركز الدعم والمحادثات</h3>
+                        <p className="text-slate-400 max-w-sm font-bold leading-relaxed mb-10">اختر محادثة من القائمة الجانبية لبدء التواصل مع أولياء الأمور وحل استفساراتهم بشكل فوري.</p>
+                        <div className="flex gap-4">
+                           <div className="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3">
+                               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                               <span className="text-[10px] font-black text-slate-500 uppercase">نظام البث المباشر مفعل</span>
+                           </div>
+                        </div>
                     </div>
                 )}
             </div>
+
+            <style jsx global>{`
+                @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+                .font-cairo { font-family: 'Cairo', sans-serif; }
+                
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+            `}</style>
         </div>
     );
 }
