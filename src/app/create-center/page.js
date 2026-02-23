@@ -16,7 +16,8 @@ export default function CreateCenterPage() {
     adminEmail: '',
     adminPassword: '',
     adminName: '',
-    packageId: ''
+    packageId: '',
+    centerType: 'center',  // 🎭 'center' | 'instructor'
   });
 
   const [packages, setPackages] = useState([]);
@@ -83,7 +84,8 @@ export default function CreateCenterPage() {
           owner_id: userId,
           package_id: centerData.packageId,
           subscription_end_date: endDate.toISOString(),
-          is_active: true
+          is_active: true,
+          center_type: centerData.centerType,  // 🎭
         }])
         .select()
         .single();
@@ -226,6 +228,35 @@ export default function CreateCenterPage() {
                             <p className={`font-black text-sm mb-1 ${centerData.packageId === pkg.id ? 'text-blue-700' : 'text-slate-700'}`}>{pkg.name}</p>
                             <p className="text-xs font-black text-slate-400">{pkg.price} ج.م / {pkg.duration_days} يوم</p>
                             <div className={`absolute bottom-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full translate-x-8 translate-y-8 group-hover/pkg:scale-150 transition-transform duration-700`}></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 🎭 نوع الحساب */}
+                    <div className="space-y-3">
+                      <label className="text-xs font-black text-slate-400 mr-2 flex items-center gap-2">
+                        <span>🎭</span> نوع الحساب
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { type: 'center',     emoji: '🏫', title: 'سنتر تعليمي',  sub: 'مركز بمدرسين متعددين' },
+                          { type: 'instructor', emoji: '👨‍🏫', title: 'مدرس مستقل', sub: 'أنت المدرس وصاحب المنصة' },
+                        ].map(({ type, emoji, title, sub }) => (
+                          <div
+                            key={type}
+                            onClick={() => setCenterData(p => ({ ...p, centerType: type }))}
+                            className={`p-4 rounded-3xl border-2 cursor-pointer transition-all ${
+                              centerData.centerType === type
+                                ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/10'
+                                : 'border-slate-100 bg-white hover:border-slate-200'
+                            }`}
+                          >
+                            <p className="text-2xl mb-2">{emoji}</p>
+                            <p className={`font-black text-sm ${
+                              centerData.centerType === type ? 'text-blue-700' : 'text-slate-700'
+                            }`}>{title}</p>
+                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">{sub}</p>
                           </div>
                         ))}
                       </div>

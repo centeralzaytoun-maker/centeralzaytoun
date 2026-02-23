@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
 import { motion, AnimatePresence } from 'framer-motion';
+import AccessDenied from '../../../components/AccessDenied';
 
 // دالة لتوليد نصائح ذكية بناءً على الإحصائيات المالية
 const getAINarrative = (stats) => {
@@ -85,7 +86,12 @@ const getAINarrative = (stats) => {
   };
 };
 export default function AdminDashboard() {
-  const { centerId } = useAuth(); // ← استخراج centerId من الـ context
+  const { centerId, allowedFeatures, loading: authLoading } = useAuth(); // ← استخراج centerId من الـ context
+
+  // 🛡️ Package Guard
+  if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_admin_dashboard')) {
+    return <AccessDenied />;
+  }
   
   // دالة لتحويل الوقت لنظام 12 ساعة
   const formatTime12 = (timeStr) => {

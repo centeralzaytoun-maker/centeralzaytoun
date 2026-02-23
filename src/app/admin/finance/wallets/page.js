@@ -8,6 +8,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '../../../../context/AuthContext';
 import { toast } from 'sonner';
+import AccessDenied from '../../../../components/AccessDenied';
 
 export default function WalletsPage() {
   const { user, centerId, allowedFeatures, loading: authLoading } = useAuth(); // 🛡️ Get permissions
@@ -257,12 +258,7 @@ export default function WalletsPage() {
   // 🛡️ الحماية ومنع العرض قبل التحقق من الصلاحيات
   if (authLoading || (allowedFeatures && !allowedFeatures.includes('page_finance_wallets'))) {
     if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_finance_wallets')) {
-         return (
-             <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-red-500">
-                 <h1 className="text-2xl font-bold">غير مصرح لك بالدخول لهذه الصفحة 🔒</h1>
-                 <Link href="/admin/dashboard" className="text-blue-600 underline mt-4">العودة للرئيسية</Link>
-             </div>
-         );
+         return <AccessDenied />;
     }
     return <div className="min-h-screen flex items-center justify-center bg-gray-50">جاري التحقق من الصلاحيات...</div>;
   }

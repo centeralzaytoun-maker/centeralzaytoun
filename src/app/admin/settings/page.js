@@ -11,12 +11,19 @@ import {
   FaUserGraduate, FaPlus, FaTimes
 } from 'react-icons/fa';
 
+import AccessDenied from '../../../components/AccessDenied';
+
 // ══════════════════════════════════════════════════════════════
 // SettingsPage — Fully Responsive Premium UI
 // ══════════════════════════════════════════════════════════════
 export default function SettingsPage() {
   const router = useRouter();
-  const { centerId: center_id, loading: authLoading, user } = useAuth();
+  const { centerId: center_id, loading: authLoading, user, allowedFeatures } = useAuth();
+
+  // 🛡️ Package Guard
+  if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_settings')) {
+    return <AccessDenied />;
+  }
 
   // ── Core Settings State ──
   const [settings, setSettings] = useState({
@@ -36,6 +43,17 @@ export default function SettingsPage() {
     package_name: '',
     end_date: ''
   });
+
+  // 🎭 Identity Mode State
+  const [centerType, setCenterType] = useState('center'); // 'center' | 'instructor'
+  const [instructorFields, setInstructorFields] = useState({
+    instructor_name: '',
+    instructor_photo_url: '',
+    instructor_bio: '',
+    instructor_title: '',
+    instructor_subject: '',
+  });
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // ── Rooms & Stages State ──
   const [rooms, setRooms] = useState([]);
@@ -96,6 +114,14 @@ export default function SettingsPage() {
             package_name: centerData?.packages?.name || 'غير محدد',
             end_date: centerData?.subscription_end_date || ''
           });
+          // 🎭 Identity Mode
+          setInstructorFields({
+            instructor_name: settingsData.instructor_name || '',
+            instructor_photo_url: settingsData.instructor_photo_url || '',
+            instructor_bio: settingsData.instructor_bio || '',
+            instructor_title: settingsData.instructor_title || '',
+            instructor_subject: settingsData.instructor_subject || '',
+          });
         } else {
           setSettings(prev => ({
             ...prev,
@@ -103,6 +129,14 @@ export default function SettingsPage() {
             end_date: centerData?.subscription_end_date || ''
           }));
         }
+
+        // 🎭 جلب center_type من centers
+        const { data: centerTypeData } = await supabaseBrowser
+          .from('centers')
+          .select('center_type')
+          .eq('id', center_id)
+          .single();
+        if (centerTypeData?.center_type) setCenterType(centerTypeData.center_type);
 
         const { data: roomsData } = await supabaseBrowser
           .from('rooms')
@@ -144,6 +178,7 @@ export default function SettingsPage() {
     if (!center_id) return alert('خطأ: لم يتم التعرف على السنتر!');
 
     setSaving(true);
+    // حفظ center_settings
     const { error } = await supabaseBrowser
       .from('center_settings')
       .upsert({
@@ -159,8 +194,16 @@ export default function SettingsPage() {
         msg_debt: settings.msg_debt,
         msg_absent: settings.msg_absent,
         next_student_code: settings.next_student_code,
-        student_code_prefix: settings.student_code_prefix
+        student_code_prefix: settings.student_code_prefix,
+        // 🎭 Instructor Mode fields
+        ...instructorFields,
       }, { onConflict: 'center_id' });
+
+    // حفظ center_type في centers
+    await supabaseBrowser
+      .from('centers')
+      .update({ center_type: centerType })
+      .eq('id', center_id);
 
     if (error) {
       alert('حدث خطأ أثناء الحفظ: ' + error.message);
@@ -197,6 +240,30 @@ export default function SettingsPage() {
       alert('فشل الرفع: ' + error.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  // 👨‍🏫 Instructor Photo Upload
+  const handleInstructorPhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${center_id}-instructor-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabaseBrowser.storage
+        .from('center-logos')
+        .upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabaseBrowser.storage
+        .from('center-logos')
+        .getPublicUrl(fileName);
+      setInstructorFields(prev => ({ ...prev, instructor_photo_url: publicUrl }));
+      alert("تم رفع الصورة! اضغط 'حفظ الإعدادات' لتثبيتها.");
+    } catch (error) {
+      alert('فشل الرفع: ' + error.message);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -451,6 +518,163 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* 🎭 IDENTITY MODE CARD */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden mx-2 md:mx-0">
+        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-100">
+              <FaUserGraduate className="text-white text-xl" />
+            </div>
+            <div>
+              <h2 className="font-black text-slate-800 text-lg">وضع الهوية (Identity Mode)</h2>
+              <p className="text-[11px] text-slate-400 font-bold">كيف يتعامل النظام مع هذا الحساب؟</p>
+            </div>
+          </div>
+          {/* Toggle */}
+          <div className="flex bg-slate-100 rounded-2xl p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => setCenterType('center')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all ${
+                centerType === 'center'
+                  ? 'bg-white text-blue-700 shadow-md'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              🏫 سنتر
+            </button>
+            <button
+              type="button"
+              onClick={() => setCenterType('instructor')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all ${
+                centerType === 'instructor'
+                  ? 'bg-white text-violet-700 shadow-md'
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              👨‍🏫 مدرس
+            </button>
+          </div>
+        </div>
+
+        {/* Instructor Fields — تظهر فقط في Instructor Mode */}
+        {centerType === 'instructor' && (
+          <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* 🖼️ Instructor Photo */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                {instructorFields.instructor_photo_url ? (
+                  <img
+                    src={instructorFields.instructor_photo_url}
+                    alt="صورة المدرس"
+                    className="w-32 h-32 rounded-full object-cover border-4 border-violet-100 shadow-xl"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-violet-50 border-4 border-dashed border-violet-200 flex items-center justify-center">
+                    <FaUserGraduate className="text-violet-300 text-4xl" />
+                  </div>
+                )}
+                {uploadingPhoto && (
+                  <div className="absolute inset-0 bg-white/80 rounded-full flex items-center justify-center">
+                    <FaSync className="animate-spin text-violet-600 text-2xl" />
+                  </div>
+                )}
+              </div>
+              <input type="file" id="instructorPhotoInput" hidden accept="image/*" onChange={handleInstructorPhotoUpload} />
+              <label
+                htmlFor="instructorPhotoInput"
+                className="flex items-center gap-2 bg-violet-600 text-white px-5 py-2.5 rounded-2xl font-black cursor-pointer hover:bg-violet-700 transition text-sm"
+              >
+                <FaUpload /> {uploadingPhoto ? 'جاري...' : 'رفع صورة'}
+              </label>
+              <p className="text-[10px] text-slate-400 font-bold text-center">
+                صورة شخصية بخلفية سادة<br />مقترح: 400×400 بكسل
+              </p>
+            </div>
+
+            {/* 📝 Instructor Info */}
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">اسم المدرس</label>
+                <input
+                  type="text"
+                  value={instructorFields.instructor_name}
+                  onChange={e => setInstructorFields(p => ({ ...p, instructor_name: e.target.value }))}
+                  className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl focus:border-violet-500 outline-none font-black text-slate-800 text-sm"
+                  placeholder="أ/ محمد علي"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">المادة / التخصص</label>
+                <input
+                  type="text"
+                  value={instructorFields.instructor_subject}
+                  onChange={e => setInstructorFields(p => ({ ...p, instructor_subject: e.target.value }))}
+                  className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl focus:border-violet-500 outline-none font-black text-slate-800 text-sm"
+                  placeholder="رياضيات — ثانوي"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">اللقب / الرتبة</label>
+                <input
+                  type="text"
+                  value={instructorFields.instructor_title}
+                  onChange={e => setInstructorFields(p => ({ ...p, instructor_title: e.target.value }))}
+                  className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl focus:border-violet-500 outline-none font-black text-slate-800 text-sm"
+                  placeholder="أستاذ — خبرة 15 سنة"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">نبذة عن المدرس</label>
+                <textarea
+                  value={instructorFields.instructor_bio}
+                  onChange={e => setInstructorFields(p => ({ ...p, instructor_bio: e.target.value }))}
+                  rows={3}
+                  className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl focus:border-violet-500 outline-none font-bold text-slate-700 text-sm resize-none"
+                  placeholder="أستاذ رياضيات بخبرة 15 عام، متخصص في تأسيس طلاب الثانوية العامة..."
+                />
+              </div>
+            </div>
+
+            {/* 🔮 Live Preview */}
+            {(instructorFields.instructor_name || instructorFields.instructor_photo_url) && (
+              <div className="md:col-span-3 bg-gradient-to-l from-violet-50 to-purple-50 rounded-3xl p-6 border border-violet-100">
+                <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-4">معاينة — كيف سيظهر في النظام</p>
+                <div className="flex items-center gap-5">
+                  {instructorFields.instructor_photo_url ? (
+                    <img src={instructorFields.instructor_photo_url} className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-xl" alt="" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-violet-200 flex items-center justify-center font-black text-2xl text-violet-600">
+                      {instructorFields.instructor_name?.[0] || '؟'}
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-black text-slate-800 text-xl">أ/ {instructorFields.instructor_name || 'اسم المدرس'}</p>
+                    <p className="text-sm font-bold text-violet-600">
+                      {instructorFields.instructor_title}{instructorFields.instructor_title && instructorFields.instructor_subject ? ' · ' : ''}{instructorFields.instructor_subject}
+                    </p>
+                    {instructorFields.instructor_bio && (
+                      <p className="text-xs text-slate-500 font-bold mt-1 max-w-lg line-clamp-1">{instructorFields.instructor_bio}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {centerType === 'center' && (
+          <div className="px-8 py-6 flex items-center gap-4 bg-blue-50/30">
+            <div className="w-10 h-10 bg-blue-100 rounded-2xl flex items-center justify-center">
+              <FaBuilding className="text-blue-500" />
+            </div>
+            <p className="text-sm font-bold text-slate-500">
+              في وضع <span className="text-blue-700 font-black">السنتر</span> — الشعار والاسم يُجلبان من قسم هوية السنتر أدناه.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 🎯 SETTINGS GRID */}

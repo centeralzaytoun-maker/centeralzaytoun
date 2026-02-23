@@ -10,7 +10,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { 
   FaSearch, FaUserPlus, FaEdit, FaTrash, FaWhatsapp, FaEye, FaIdCard, 
   FaFilter, FaArrowRight, FaUserGraduate, FaLayerGroup, FaUsers, 
-  FaSave, FaPrint, FaFileExcel, FaPhoneAlt, FaCalendarAlt 
+  FaSave, FaPrint, FaFileExcel, FaPhoneAlt, FaCalendarAlt ,FaMobileAlt
 } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
@@ -110,7 +110,8 @@ export default function StudentsPage() {
     unique_id: '',
     free_courses: [],
     center_only_courses: [],
-    monthly_courses: []
+    monthly_courses: [],
+    max_devices: 1 // 📱 القيمة الافتراضية
   });
 
 
@@ -572,7 +573,8 @@ const handleSubmit = async (e) => {
         subscription_type: formData.subscription_type, // 🆕
         free_courses: formData.free_courses, // 🆕
         center_only_courses: formData.center_only_courses, // 🆕
-        monthly_courses: formData.monthly_courses || [] // 🆕 لحفظ الاشتراك الشهري للمواد
+        monthly_courses: formData.monthly_courses || [], // 🆕 لحفظ الاشتراك الشهري للمواد
+        max_devices: formData.max_devices || 1 // 📱 حفظ عدد الأجهزة
       };
 
       // 🔒 قفل البيزنس: هل السنتر يمتلك صلاحية المنصة؟
@@ -757,7 +759,8 @@ const handleEdit = (student) => {
       subscription_type: student.subscription_type || 'عادي',
       free_courses: student.free_courses || [],
       center_only_courses: student.center_only_courses || [],
-      monthly_courses: student.monthly_courses || []
+      monthly_courses: student.monthly_courses || [],
+      max_devices: student.max_devices || 1 // 📱 جلب عدد الأجهزة
     });
 
     setEditId(student.id);
@@ -858,6 +861,24 @@ const handleDelete = async (id) => {
 
   }
 
+};
+
+const handleResetDevice = async (id, name) => {
+    if (!confirm(`هل أنت متأكد من إعادة ضبط أجهزة الطالب: ${name}؟\nسيتم مسح الأجهزة الحالية والسماح له بالدخول من أجهزة جديدة.`)) return;
+
+    try {
+        const { error } = await supabaseBrowser
+            .from('students')
+            .update({ registered_devices: [] }) // مسح مصفوفة الأجهزة
+            .eq('id', id);
+
+        if (error) throw error;
+        toast.success("✅ تم إعادة ضبط الأجهزة بنجاح");
+        refetch();
+    } catch (err) {
+        console.error("Reset device error:", err);
+        toast.error("❌ فشل إعادة ضبط الأجهزة");
+    }
 };
 
   const handleExportExcel = async () => {
@@ -1886,18 +1907,33 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
 
             </div>
 
-            <div className="flex items-center gap-2 mt-4 bg-gray-50 p-3 rounded-lg border min-h-[44px]">
-                <label className="flex items-center gap-2 cursor-pointer w-full">
-                    <input 
-                        type="checkbox" 
-                        checked={!!formData.is_active}
-                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                        className="w-5 h-5 accent-blue-600"
-                    />
-                    <span className={`font-bold ${formData.is_active ? 'text-blue-700' : 'text-gray-500'}`}>
-                        {formData.is_active ? '🔵 حساب الطالب مفعل (يسمح بالدخول)' : '⚪ حساب معطل (ممنوع من الدخول)'}
+            <div className="flex flex-col sm:flex-row gap-4 mt-4">
+                <div className="flex-1 flex items-center gap-2 bg-gray-50 p-3 rounded-lg border min-h-[44px]">
+                    <label className="flex items-center gap-2 cursor-pointer w-full">
+                        <input 
+                            type="checkbox" 
+                            checked={!!formData.is_active}
+                            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                            className="w-5 h-5 accent-blue-600"
+                        />
+                        <span className={`font-bold ${formData.is_active ? 'text-blue-700' : 'text-gray-500'}`}>
+                            {formData.is_active ? '🔵 حساب الطالب مفعل' : '⚪ حساب معطل'}
+                        </span>
+                    </label>
+                </div>
+
+                <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100 min-h-[44px]">
+                    <span className="text-sm font-black text-blue-800 flex items-center gap-2">
+                         📱 أقصى عدد أجهزة:
                     </span>
-                </label>
+                    <input 
+                        type="number" 
+                        min="1" max="10"
+                        value={formData.max_devices}
+                        onChange={(e) => setFormData({ ...formData, max_devices: parseInt(e.target.value) || 1 })}
+                        className="w-16 p-1 bg-white border-2 border-blue-200 rounded text-center font-black text-blue-700 outline-none focus:border-blue-500"
+                    />
+                </div>
             </div>
 
 
@@ -2364,6 +2400,22 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 >
                     <FaWhatsapp className="text-sm" />
                     <span className="text-[10px] font-bold hidden sm:inline">بيانات الدخول {allowedFeatures?.includes('action_student_portal') ? '' : '🔒'}</span>
+                </button>
+
+                {/* 5.1. زر إعادة ضبط الجهاز (جديد) */}
+                <button 
+                    onClick={() => {
+                        if (!allowedFeatures?.includes('action_student_portal')) return toast.error('🔒 المنصة التعليمية غير مفعلة');
+                        handleResetDevice(student.id, student.name);
+                    }} 
+                    className={`p-2 min-h-[44px] rounded-lg transition shadow-sm flex items-center justify-center gap-1 border
+                        ${allowedFeatures?.includes('action_student_portal') 
+                            ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 border-cyan-200' 
+                            : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'}`}
+                    title="إعادة ضبط جهاز الطالب (Device Reset)"
+                >
+                    <FaMobileAlt className="text-sm" />
+                    <span className="text-[10px] font-bold hidden sm:inline">إعادة ضبط جهاز {allowedFeatures?.includes('action_student_portal') ? '' : '🔒'}</span>
                 </button>
 
                 {/* 6. زر الحذف (محمي) */}

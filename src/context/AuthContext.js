@@ -10,6 +10,7 @@ const AuthContext = createContext({
   role: null,
   allowedFeatures: null, 
   loading: true,
+  isDeviceAuthorized: true, // 📱 الحالة الجديدة
   signOut: async () => {},
   activateCenter: (id) => {}, 
 });
@@ -25,6 +26,7 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
   const [role, setRole] = useState(initialRole || null);
   const [allowedFeatures, setAllowedFeatures] = useState(null); 
   const [loading, setLoading] = useState(true); 
+  const [isDeviceAuthorized, setIsDeviceAuthorized] = useState(true); // الحالة الافتراضية
   const isMounted = React.useRef(true); 
   const isSyncing = React.useRef(false);
   const lastRequestId = React.useRef(0); // 🔥 لتتبع آخر طلب تحقق ومنع تداخل البيانات القديمة
@@ -176,13 +178,45 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
                 } else {
                     const { data: studentProfile } = await supabase
                         .from('students')
-                        .select('center_id')
+                        .select('center_id, registered_devices, max_devices')
                         .eq('id', userForProfile.id)
                         .maybeSingle();
                     
                     if (studentProfile) {
                         targetCid = studentProfile.center_id || targetCid;
                         targetRole = 'student';
+
+                        // 🔒 منطق قفل الأجهزة المرن (Flexible Device Lock)
+                        const getDeviceFingerprint = () => {
+                            let id = localStorage.getItem('cls_device_id');
+                            if (!id) {
+                                id = 'dev-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now();
+                                localStorage.setItem('cls_device_id', id);
+                            }
+                            return id;
+                        };
+
+                        const currentDeviceId = getDeviceFingerprint();
+                        const registeredDevices = studentProfile.registered_devices || [];
+                        const maxDevices = studentProfile.max_devices || 1;
+
+                        if (registeredDevices.includes(currentDeviceId)) {
+                            // الجهاز مسجل فعلاً
+                            setIsDeviceAuthorized(true);
+                        } else if (registeredDevices.length < maxDevices) {
+                            // جهاز جديد وهناك مكان شاغر: سجله
+                            const updatedDevices = [...registeredDevices, currentDeviceId];
+                            await supabase
+                                .from('students')
+                                .update({ registered_devices: updatedDevices })
+                                .eq('id', userForProfile.id);
+                            setIsDeviceAuthorized(true);
+                            console.log("📱 New device registered within limit");
+                        } else {
+                            // جهاز زائد عن الحد: لا تطرده، ولكن امنع المحتوى
+                            setIsDeviceAuthorized(false);
+                            console.error("🛑 Device limit reached for content access");
+                        }
                     }
                 }
 
@@ -292,7 +326,7 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
   };
 
   const value = {
-    user, session, centerId, role, allowedFeatures, loading, 
+    user, session, centerId, role, allowedFeatures, loading, isDeviceAuthorized,
     signOut, activateCenter, setUser, setSession, setCenterId, setRole, setAllowedFeatures, setLoading
   };
 

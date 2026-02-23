@@ -5,7 +5,7 @@ import {
   FaClock, FaMapMarkerAlt, FaChalkboardTeacher, FaBell, FaQrcode, 
   FaCheckCircle, FaInfoCircle, FaWifi, FaSync, FaExclamationTriangle, 
   FaBellSlash, FaHourglassHalf, FaWallet, FaFileInvoiceDollar , FaUserGraduate ,FaSearch, FaSignOutAlt, FaFileAlt,
-  FaAward, FaTrophy, FaMedal, FaStar, FaTimes
+  FaAward, FaTrophy, FaMedal, FaStar, FaTimes,FaPlayCircle, FaArrowRight, FaShieldAlt
 } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import { setupStudentPushNotifications } from '../../../lib/student-notifications';
@@ -53,6 +53,7 @@ export default function StudentDashboard() {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, isNow: false });
   const [notified, setNotified] = useState(false);
   const [examResults, setExamResults] = useState([]);
+  const [electronicExams, setElectronicExams] = useState([]); // 🆕
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [showBadgesModal, setShowBadgesModal] = useState(false);
 
@@ -403,6 +404,23 @@ export default function StudentDashboard() {
       await refreshNotificationsOnly(userId);
       const results = await fetchExamResults(userId, currentCenterId);
       
+      // ✅ Fetch Electronic Exams
+      const { data: eExams } = await supabase
+        .from('exams')
+        .select('*')
+        .eq('center_id', currentCenterId)
+        .eq('is_published', true)
+        .eq('is_electronic', true);
+      
+      // Filter by group_id or course_id if applicable
+      const enrolledExams = eExams?.filter(ex => {
+        const studentGroups = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
+        const studentCourses = enrollment.enrolled_courses || [];
+        return (!ex.group_id || studentGroups.includes(ex.group_id)) && 
+               (!ex.course_id || studentCourses.includes(ex.course_id));
+      }) || [];
+      setElectronicExams(enrolledExams);
+
       // Calculate badges after data is ready
       const currentGroupIds = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
       if (currentGroupIds.length > 0) {
@@ -1055,6 +1073,80 @@ export default function StudentDashboard() {
             <p className="text-[10px] font-black text-gray-400 font-mono tracking-widest">{uniqueCode || '---'}</p>
         </div>
       </div>
+
+      {/* 📚 Digital Academy Section - WOW FACTOR */}
+      <div className="max-w-4xl mx-auto mb-12">
+        <Link href="/student/courses" className="block relative bg-white rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 shadow-xl border border-blue-50 group hover:shadow-2xl hover:shadow-blue-500/10 transition-all overflow-hidden border-b-8 border-blue-600">
+           <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
+              <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500">
+                 <FaChalkboardTeacher size={36} />
+              </div>
+              <div className="text-center md:text-right flex-1">
+                 <h2 className="text-3xl font-black text-slate-800 mb-2">أكاديمية كلاسورا الرقمية 🚀</h2>
+                 <p className="text-sm md:text-base text-slate-500 font-bold leading-relaxed">
+                    من هنا ابدأ رحلتك الأونلاين! شاهد فيديوهات الشرح، حمّل المذكرات، وتابع حصصك المسجلة بجودة عالية وفي أي وقت.
+                 </p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                 <div className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl font-black text-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                    تصفح المواد الآن
+                 </div>
+                 <div className="flex -space-x-3 rtl:space-x-reverse">
+                    {[1,2,3,4].map(i => (
+                      <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 overflow-hidden">
+                         <img src={`https://i.pravatar.cc/100?u=${i+10}`} alt="student" />
+                      </div>
+                    ))}
+                    <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-[8px] font-black text-blue-600">+500</div>
+                 </div>
+              </div>
+           </div>
+
+           {/* Decorative UI elements */}
+           <div className="absolute top-0 left-0 p-8 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
+              <FaPlayCircle size={250} className="transform -rotate-12" />
+           </div>
+            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-500/5 rounded-full blur-3xl"></div>
+        </Link>
+      </div>
+
+      {/* ⚡ Electronic Exams Section */}
+      {electronicExams.length > 0 && (
+        <div className="max-w-4xl mx-auto mb-12">
+           <div className="flex items-center gap-3 mb-6 px-4">
+              <h2 className="text-xl font-black text-slate-800">الامتحانات الإلكترونية المتاحة ⚡</h2>
+              <span className="bg-pink-100 text-pink-600 px-3 py-1 rounded-full text-[10px] font-black animate-pulse">مباشر الآن</span>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {electronicExams.map(ex => (
+                <div key={ex.id} className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-50 shadow-sm hover:shadow-xl hover:border-pink-200 transition-all group">
+                   <div className="flex justify-between items-start gap-4 mb-6">
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 bg-pink-50 text-pink-500 rounded-2xl flex items-center justify-center text-xl shadow-inner group-hover:scale-110 transition-transform">
+                            <FaFileAlt />
+                         </div>
+                         <div>
+                            <h4 className="font-black text-slate-800 text-sm">{ex.title}</h4>
+                            <p className="text-[10px] font-bold text-slate-400">مدة الامتحان: {ex.duration_minutes} دقيقة</p>
+                         </div>
+                      </div>
+                      <div className="bg-slate-50 px-3 py-1 rounded-lg text-[8px] font-black text-slate-400">
+                         {ex.exam_date}
+                      </div>
+                   </div>
+
+                   <Link
+                     href={`/portal/exams/${ex.id}`}
+                     className="w-full h-12 bg-pink-600 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-pink-700 shadow-lg shadow-pink-100 transition-all active:scale-95"
+                   >
+                      دخول الامتحان الآن <FaArrowRight className="rotate-180" />
+                   </Link>
+                </div>
+              ))}
+           </div>
+        </div>
+      )}
 
       {/* 🗓️ Row 2: Content Grid (Schedule & Notifications) */}
       <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">

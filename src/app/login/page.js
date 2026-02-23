@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase-browser';
-import { useRouter } from 'next/navigation';
-import { FaUserGraduate, FaLock, FaSignInAlt, FaExclamationCircle, FaRocket, FaStar, FaTrophy } from 'react-icons/fa';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { FaUserGraduate, FaLock, FaSignInAlt, FaExclamationCircle, FaRocket, FaStar, FaTrophy, FaMobileAlt } from 'react-icons/fa';
+import { useEffect } from 'react';
 
 export default function StudentLoginPage() {
   const [studentCode, setStudentCode] = useState('');
@@ -10,6 +11,14 @@ export default function StudentLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'device_limit') {
+      setError('⚠️ عذراً، لا يمكنك الدخول من هذا الجهاز. مسموح بجهاز واحد فقط مسجل مسبقاً. يرجى التواصل مع سكرتارية السنتر.');
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -26,7 +35,7 @@ export default function StudentLoginPage() {
         password: password,
       });
 
-      if (authError) throw new Error('بيانات الدخول غير صحيحة، تأكد من الكود وكلمة السر.');
+      if (authError) throw new Error(authError.message || 'بيانات الدخول غير صحيحة، تأكد من الكود وكلمة السر.');
 
       // 3. التحقق هل هذا المستخدم طالب فعلاً؟ مع فلترة حسب المركز
       const { data: student, error: studentError } = await supabase
@@ -74,7 +83,13 @@ export default function StudentLoginPage() {
      router.push('/portal/dashboard'); // تعديل المسار ليتطابق مع مكان الفولدر // تأكد من اسم المسار عندك
 
     } catch (err) {
-      setError(err.message);
+      console.error("❌ Login Error Details:", err);
+      // 🔥 لو طلع الخطأ متعلق بتأكيد الإيميل، ممكن نظهر رسالة أوضح للمستخدم
+      if (err.message?.includes('Email not confirmed')) {
+          setError('حسابك يحتاج لتفعيل من الإدارة أولاً أو تأكد من إعدادات السيرفر.');
+      } else {
+          setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

@@ -42,11 +42,12 @@ export default function CoursesPage() {
   // 🔄 تم تعديل الفورم ليحفظ ID المدرس بدلاً من الاسم النصي
   const [formData, setFormData] = useState({
     name: '',
-    instructor_id: '', // 🆕 استبدلنا instructor بـ instructor_id
+    instructor_id: '',
     grade: '',
     price: '',
     center_tax: '',
-    monthly_price: '' // 🆕 سعر الاشتراك الشهري
+    monthly_price: '',
+    is_sequential: false // ⛓️ إلزام بالتسلسل
   });
 
   // --- Fetch Stages (جلب المراحل الدراسية من الإعدادات) ---
@@ -130,13 +131,13 @@ useEffect(() => {
     try {
       const courseData = {
         name: formData.name,
-        instructor_id: formData.instructor_id, // 🆕 الحفظ بالـ ID
-        // instructor: ..., // 🗑️ شلنا الاسم النصي خلاص عشان منعملش داتا مزدوجة
+        instructor_id: formData.instructor_id,
         grade: formData.grade,
         price: parseFloat(formData.price) || 0,
         center_tax: parseFloat(formData.center_tax) || 0,
-        monthly_price: parseFloat(formData.monthly_price) || 0, // 🆕
-        center_id: centerId // ← إضافة center_id
+        monthly_price: parseFloat(formData.monthly_price) || 0,
+        is_sequential: formData.is_sequential ?? false, // ⛓️
+        center_id: centerId
       };
 
       if (isEditing) {
@@ -215,11 +216,12 @@ useEffect(() => {
   const handleEdit = (course) => {
     setFormData({
       name: course.name,
-      instructor_id: course.instructor_id || '', // 🆕 تحميل الـ ID للمدرس
+      instructor_id: course.instructor_id || '',
       grade: course.grade,
       price: course.price,
       center_tax: course.center_tax || '',
-      monthly_price: course.monthly_price || '' // 🆕 تحميل السعر الشهري
+      monthly_price: course.monthly_price || '',
+      is_sequential: course.is_sequential ?? false // ⛓️
     });
     setEditId(course.id);
     setIsEditing(true);
@@ -227,7 +229,7 @@ useEffect(() => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', instructor_id: '', grade: '', price: '', center_tax: '', monthly_price: '' });
+    setFormData({ name: '', instructor_id: '', grade: '', price: '', center_tax: '', monthly_price: '', is_sequential: false });
     setIsEditing(false);
     setEditId(null);
   };
@@ -394,6 +396,35 @@ useEffect(() => {
                 </div>
             </div>
 
+            {/* ⛓️ إلزام بالتسلسل Toggle */}
+            <div className="col-span-1 sm:col-span-2 lg:col-span-5">
+              <div
+                onClick={() => setFormData(p => ({ ...p, is_sequential: !p.is_sequential }))}
+                className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 select-none
+                  ${formData.is_sequential
+                    ? 'border-indigo-400 bg-indigo-50'
+                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{formData.is_sequential ? '⛓️' : '🔓'}</span>
+                  <div>
+                    <p className={`font-black text-sm ${formData.is_sequential ? 'text-indigo-700' : 'text-gray-600'}`}>
+                      إلزام الطالب بالتسلسل
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {formData.is_sequential
+                        ? 'الدرس التالي يُفتح فقط بعد إتمام السابق ✅'
+                        : 'الطالب حر في اختيار أي درس'}
+                    </p>
+                  </div>
+                </div>
+                {/* Toggle Switch */}
+                <div className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${formData.is_sequential ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${formData.is_sequential ? 'right-1' : 'left-1'}`} />
+                </div>
+              </div>
+            </div>
+
             {/* زر الحفظ */}
             <div className="col-span-1 sm:col-span-2 lg:col-span-5 mt-2">
                 <button 
@@ -445,17 +476,21 @@ useEffect(() => {
                         <div className="flex items-center justify-between mb-3 md:mb-4">
                             <div className="flex items-center gap-2 text-gray-600">
                                 <FaChalkboardTeacher className="text-blue-400 text-sm" />
-                                {/* 🆕 عرض اسم المدرس من العلاقة (مع دعم البيانات القديمة لو موجودة) */}
                                 <span className="text-xs sm:text-sm font-semibold">
                                     مستر/ {course.instructors?.name || course.instructor || 'غير محدد'}
                                 </span>
                             </div>
-                            {/* عرض قيمة خصم السنتر في الكارت */}
                             <div className="bg-blue-50 px-2 py-1 rounded-md border border-blue-100 flex items-center gap-1">
                                 <FaMoneyBillWave className="text-blue-500 text-[10px]" />
                                 <span className="text-[9px] sm:text-[10px] font-bold text-blue-700">خصم: {course.center_tax || 0}ج</span>
                             </div>
                         </div>
+                        {/* ⛓️ Sequential Badge */}
+                        {course.is_sequential && (
+                          <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg mb-3 w-fit">
+                            <span>⛓️</span> إلزام بالتسلسل مفعّل
+                          </div>
+                        )}
                         
                         {/* Actions */}
                         <div className="flex gap-2 mt-3 md:mt-4 pt-3 md:pt-4 border-t border-dashed border-gray-100">

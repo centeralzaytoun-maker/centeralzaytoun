@@ -143,14 +143,22 @@ export async function POST(req) {
         uniqueId = uniqueId || ("S-" + Math.floor(1000 + Math.random() * 9000));
     }
 
+    // Insert student data
+    // 🛡️ RE-FIX: Ensure the auth email ALWAYS matches the final uniqueId
+    // If we generated a sequential ID, we must ignore the frontend provided email
+    const finalUniqueId = uniqueId;
+    const finalEmail = `${finalUniqueId.toLowerCase()}@center.com`;
+    const finalPassword = studentData.password || (studentData.phone || "12345678");
+
     // Create auth user first
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: studentData.email || `${uniqueId.toLowerCase()}@center.com`,
-      password: studentData.password || (studentData.phone || "12345678"),
+      email: finalEmail,
+      password: finalPassword,
       email_confirm: true,
       user_metadata: { 
         role: 'student', 
-        full_name: studentData.name 
+        full_name: studentData.name,
+        unique_id: finalUniqueId
       }
     });
 

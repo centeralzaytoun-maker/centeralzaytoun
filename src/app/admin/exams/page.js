@@ -3,14 +3,22 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../../../lib/supabase-browser';
 import { 
   FaFileInvoiceDollar, FaPlus, FaTrophy, FaUserCheck, FaFileExcel, 
-  FaTrash, FaEdit, FaEye, FaChevronLeft, FaSpinner, FaLock, FaCheckCircle, FaChartBar, FaLayerGroup, FaWhatsapp , FaSearch, FaShareAlt, FaPhone,FaCalendarPlus
+  FaTrash, FaEdit, FaEye, FaChevronLeft, FaSpinner, FaLock, FaCheckCircle, FaChartBar, FaLayerGroup, FaWhatsapp , FaSearch, FaShareAlt, FaPhone,FaCalendarPlus,
+  FaBook, FaQuestionCircle, FaClock, FaTools
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
+import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import AccessDenied from '../../../components/AccessDenied';
 
 export default function ExamsPage() {
   const { centerId, allowedFeatures, loading: authLoading } = useAuth();
+  
+  // 🛡️ Package Guard
+  if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_exams')) {
+    return <AccessDenied />;
+  }
   
   const [exams, setExams] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -39,7 +47,12 @@ export default function ExamsPage() {
     course_id: '',
     group_id: '',
     max_score: 100,
-    exam_date: new Date().toISOString().split('T')[0]
+    exam_date: new Date().toISOString().split('T')[0],
+    duration_minutes: 30,
+    pass_percentage: 50,
+    max_attempts: 1,
+    shuffle_questions: true,
+    is_electronic: false // 🆕 تمييز الامتحان الإلكتروني عن الورقي
   });
 
   const fetchData = useCallback(async () => {
@@ -84,6 +97,11 @@ export default function ExamsPage() {
         max_score: parseFloat(newExam.max_score) || 100,
         exam_date: newExam.exam_date || new Date().toISOString().split('T')[0],
         center_id: centerId,
+        duration_minutes: newExam.is_electronic ? (parseInt(newExam.duration_minutes) || 30) : null,
+        pass_percentage: newExam.is_electronic ? (parseInt(newExam.pass_percentage) || 50) : null,
+        max_attempts: newExam.is_electronic ? (parseInt(newExam.max_attempts) || 1) : null,
+        shuffle_questions: newExam.shuffle_questions,
+        is_electronic: newExam.is_electronic
       };
 
       const { data, error } = await supabase
@@ -134,7 +152,12 @@ export default function ExamsPage() {
           group_id: editingExam.group_id || null,
           instructor_id: selectedCourse?.instructor_id || null,
           max_score: parseFloat(editingExam.max_score) || 100,
-          exam_date: editingExam.exam_date
+          exam_date: editingExam.exam_date,
+          duration_minutes: editingExam.is_electronic ? (parseInt(editingExam.duration_minutes) || 30) : null,
+          pass_percentage: editingExam.is_electronic ? (parseInt(editingExam.pass_percentage) || 50) : null,
+          max_attempts: editingExam.is_electronic ? (parseInt(editingExam.max_attempts) || 1) : null,
+          shuffle_questions: editingExam.shuffle_questions,
+          is_electronic: editingExam.is_electronic
         })
         .eq('id', editingExam.id)
         .eq('center_id', centerId);
@@ -236,10 +259,17 @@ export default function ExamsPage() {
               <div className="mt-8 flex flex-wrap gap-4">
                 <button 
                   onClick={() => canAddExam ? setShowAddModal(true) : toast.error('تتطلب ترقية الباقة')}
-                  className={`px-8 py-4 rounded-2xl font-black text-sm md:text-base flex items-center gap-3 shadow-2xl transition-all active:scale-95 ${canAddExam ? 'bg-white text-indigo-900 hover:bg-indigo-50' : 'bg-white/50 text-white/50 cursor-not-allowed'}`}
+                  className={`px-8 py-4 rounded-2xl font-black text-sm md:text-base flex items-center gap-3 shadow-2xl transition-all active:scale-95 ${canAddExam ? 'bg-white text-indigo-900 hover:bg-indigo-50 border-4 border-white/20' : 'bg-white/50 text-white/50 cursor-not-allowed'}`}
                 >
-                    {canAddExam ? <FaPlus /> : <FaLock />} إنشاء اختبار جديد
+                    {canAddExam ? <FaPlus className="text-pink-500" /> : <FaLock />} إنشاء اختبار جديد
                 </button>
+
+                <Link 
+                  href="/admin/exams/questions"
+                  className="px-8 py-4 rounded-2xl font-black text-sm md:text-base flex items-center gap-3 bg-indigo-500/30 backdrop-blur-md text-white border-2 border-white/10 hover:bg-indigo-500/50 transition-all shadow-xl"
+                >
+                   <FaBook className="text-yellow-400" /> بنك الأسئلة
+                </Link>
               </div>
             </div>
             
@@ -281,17 +311,33 @@ export default function ExamsPage() {
                       <div className="bg-purple-50 text-purple-700 px-3 py-1 rounded-xl text-[10px] font-black border border-purple-100 flex items-center gap-1">
                           <FaLayerGroup size={10}/> {exam.groups?.name || 'كل المجموعات'}
                       </div>
+                      {exam.is_electronic && (
+                        <div className="bg-pink-50 text-pink-700 px-3 py-1 rounded-xl text-[10px] font-black border border-pink-100 flex items-center gap-1 animate-pulse">
+                           ⚡ اختبار إلكتروني
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-auto pt-6 border-t border-gray-50 flex flex-col gap-4">
                       {/* الزرار الرئيسي - رصد الدرجات */}
-                      <button 
-                        onClick={() => startGrading(exam)}
-                        className="w-full bg-indigo-600 text-white h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
-                      >
-                          <FaFileExcel size={18} /> رصد الدرجات
-                      </button>
-                      
+                      <div className="flex flex-row gap-2 items-center">
+                        <button 
+                          onClick={() => startGrading(exam)}
+                          className="flex-1 bg-indigo-600 text-white h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 whitespace-nowrap"
+                        >
+                            <FaFileExcel size={18} /> رصد الدرجات
+                        </button>
+                        
+                        {exam.is_electronic && (
+                           <Link 
+                             href={`/admin/exams/builder?id=${exam.id}`}
+                             className="flex-1 bg-pink-600 text-white h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-lg shadow-pink-100 hover:bg-pink-700 transition-all active:scale-95 border-b-4 border-pink-800 whitespace-nowrap"
+                           >
+                              <FaTools size={18} /> بناء الأسئلة
+                           </Link>
+                        )}
+                      </div>
+                    
                       {/* زراير التحكم الثانوية */}
                       <div className="flex flex-wrap items-center justify-center gap-2">
                           <button 
@@ -439,6 +485,38 @@ export default function ExamsPage() {
                        />
                     </div>
                  </div>
+
+                  {/* 🆕 Electronic Exam Settings */}
+                  <div className="p-6 bg-pink-50 rounded-[2rem] border-2 border-pink-100 space-y-4">
+                     <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className={`w-12 h-6 rounded-full transition-all relative ${newExam.is_electronic ? 'bg-pink-500' : 'bg-gray-300'}`}>
+                           <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${newExam.is_electronic ? 'right-7' : 'right-1'}`}></div>
+                        </div>
+                        <input 
+                          type="checkbox" className="hidden"
+                          checked={newExam.is_electronic}
+                          onChange={e => setNewExam({...newExam, is_electronic: e.target.checked})}
+                        />
+                        <span className="font-black text-pink-700">تفعيل كاختبار إلكتروني (أونلاين) ⚡</span>
+                     </label>
+
+                     {newExam.is_electronic && (
+                        <div className="grid grid-cols-3 gap-3 animate-in fade-in zoom-in duration-300">
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-black text-pink-400 uppercase mr-1">الوقت (دقيقة)</label>
+                              <input type="number" value={newExam.duration_minutes} onChange={e => setNewExam({...newExam, duration_minutes: e.target.value})} className="w-full h-12 px-4 rounded-xl border-2 border-pink-100 font-bold outline-none focus:border-pink-500" />
+                           </div>
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-black text-pink-400 uppercase mr-1">المحاولات</label>
+                              <input type="number" value={newExam.max_attempts} onChange={e => setNewExam({...newExam, max_attempts: e.target.value})} className="w-full h-12 px-4 rounded-xl border-2 border-pink-100 font-bold outline-none focus:border-pink-500" />
+                           </div>
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-black text-pink-400 uppercase mr-1">النجاح %</label>
+                              <input type="number" value={newExam.pass_percentage} onChange={e => setNewExam({...newExam, pass_percentage: e.target.value})} className="w-full h-12 px-4 rounded-xl border-2 border-pink-100 font-bold outline-none focus:border-pink-500" />
+                           </div>
+                        </div>
+                     )}
+                  </div>
 
                  <div className="flex gap-4 pt-4">
                     <button 

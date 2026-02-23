@@ -13,13 +13,19 @@ import { useAuth } from '../../../context/AuthContext';
 
 // 🚀 Dynamic Import for better LCP
 const DailyReportModal = dynamic(() => import('../../../components/DailyReportModal'), { ssr: false });
+import AccessDenied from '../../../components/AccessDenied';
 
 // ══════════════════════════════════════════════════════════════
 // StaffDashboard — Fully Responsive Premium UI
 // ══════════════════════════════════════════════════════════════
 export default function StaffDashboard() {
   const router = useRouter();
-  const { centerId, allowedFeatures, user } = useAuth(); // ← استخراج centerId و allowedFeatures و user
+  const { centerId, allowedFeatures, user, loading: authLoading } = useAuth(); // ← استخراج centerId و allowedFeatures و user
+
+  // 🛡️ Package Guard
+  if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_staff_dashboard')) {
+    return <AccessDenied />;
+  }
   
   // التحقق من وجود centerId قبل تشغيل أي دوال
   useEffect(() => {

@@ -7,9 +7,17 @@ import {
 } from 'react-icons/fa';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
+import AccessDenied from '../../components/AccessDenied';
 
 export default function SuperAdminDashboard() {
+    const { allowedFeatures, loading: authLoading } = useAuth();
     const [activeTab, setActiveTab] = useState('dashboard');
+
+    // 🛡️ Package Guard
+    if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_super_admin')) {
+        return <AccessDenied />;
+    }
     
     // 📊 إحصائيات عامة
     const [totalStats, setTotalStats] = useState({
@@ -17,8 +25,9 @@ export default function SuperAdminDashboard() {
         activeCenters: 0,
         totalStudents: 0,
         expiringSoon: 0,
-        dbUsage: 0.1, // Placeholder for DB usage in MB
+        dbUsage: 0.1, 
     });
+    const [latency, setLatency] = useState(0); // ⚡ سرعة استجابة الداتابيز (Ping)
     const [centers, setCenters] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -78,13 +87,24 @@ export default function SuperAdminDashboard() {
                 .lte('subscription_end_date', nextWeek.toISOString())
                 .gte('subscription_end_date', new Date().toISOString());
 
+            // 4. حساب الحصص (عبر المنصة كاملة)
+            const { count: totalSessions } = await supabaseBrowser
+                .from('sessions')
+                .select('*', { count: 'exact', head: true });
+
             setTotalStats({
                 totalCenters: total || 0,
                 activeCenters: active || 0,
                 totalStudents: students || 0,
                 expiringSoon: expiring || 0,
-                dbUsage: ((total || 0) * 0.15 + (students || 0) * 0.01 + 5).toFixed(1), // تقدير تقريبي للمساحة
+                dbUsage: ((total || 0) * 0.1 + (students || 0) * 0.05 + (totalSessions || 0) * 0.1 + 8).toFixed(1), // تقدير دقيق لمساحة المنصة بالكامل
             });
+
+            // ⚡ فحص سرعة الاستجابة الفعلية
+            const start = Date.now();
+            await supabaseBrowser.from('centers').select('id', { count: 'exact', head: true }).limit(1);
+            setLatency(Date.now() - start);
+
         } catch (error) { console.error('Stats Error:', error); }
     };
 
@@ -94,13 +114,32 @@ export default function SuperAdminDashboard() {
     const fetchCenters = async () => {
         setLoadingCenters(true);
         try {
-            const { data, error } = await supabaseBrowser
+            const { data: centersData, error } = await supabaseBrowser
                 .from('centers')
-                .select('id, name, created_at, is_active, subscription_end_date, package_id, packages ( id, name, price )')
+                .select('id, name, created_at, is_active, subscription_end_date, package_id, center_type, packages ( id, name, price )')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setCenters(data || []);
+
+            // 📊 تقدير استهلاك البيانات لكل سنتر (Estimation Engine)
+            const { data: studentList } = await supabaseBrowser.from('students').select('center_id');
+            const { data: sessionList } = await supabaseBrowser.from('sessions').select('center_id');
+
+            const studentMap = {};
+            studentList?.forEach(s => studentMap[s.center_id] = (studentMap[s.center_id] || 0) + 1);
+
+            const sessionMap = {};
+            sessionList?.forEach(s => sessionMap[s.center_id] = (sessionMap[s.center_id] || 0) + 1);
+
+            const enriched = centersData.map(c => {
+                const sCount = studentMap[c.id] || 0;
+                const sessCount = sessionMap[c.id] || 0;
+                // المعادلة: 0.1 ميجا قاعدة + 0.05 لكل طالب + 0.1 لكل حصة
+                const usage = (0.1 + (sCount * 0.05) + (sessCount * 0.1)).toFixed(1);
+                return { ...c, usageMB: usage };
+            });
+
+            setCenters(enriched || []);
         } catch (error) { toast.error('❌ خطأ في جلب السناتر: ' + error.message); } 
         finally { setLoadingCenters(false); }
     };
@@ -112,6 +151,20 @@ export default function SuperAdminDashboard() {
             if (error) throw error;
             toast.success(currentStatus ? '⛔ تم الإيقاف' : '✅ تم التفعيل');
             setCenters(centers.map(c => c.id === centerId ? { ...c, is_active: !currentStatus } : c));
+        } catch (error) { toast.error(error.message); }
+    };
+
+    // 🎭 تبديل نوع السنتر (center ↔ instructor)
+    const toggleCenterType = async (centerId, currentType) => {
+        const newType = currentType === 'instructor' ? 'center' : 'instructor';
+        try {
+            const { error } = await supabaseBrowser
+                .from('centers')
+                .update({ center_type: newType })
+                .eq('id', centerId);
+            if (error) throw error;
+            toast.success(newType === 'instructor' ? '👨‍🏫 تم التحويل لوضع المدرس' : '🏫 تم التحويل لوضع السنتر');
+            setCenters(centers.map(c => c.id === centerId ? { ...c, center_type: newType } : c));
         } catch (error) { toast.error(error.message); }
     };
 
@@ -136,6 +189,8 @@ export default function SuperAdminDashboard() {
         e.preventDefault();
         if (!editingCenter) return;
 
+        const newPkg = packages.find(p => p.id === editForm.packageId);
+
         try {
             const { error } = await supabaseBrowser
                 .from('centers')
@@ -154,7 +209,6 @@ export default function SuperAdminDashboard() {
             setCenters(centers.map(c => {
                 if (c.id === editingCenter.id) {
                     // بنجيب اسم الباقة الجديدة عشان نعرضه صح في الجدول
-                    const newPkg = packages.find(p => p.id === editForm.packageId);
                     return {
                         ...c,
                         package_id: editForm.packageId,
@@ -185,13 +239,30 @@ export default function SuperAdminDashboard() {
 
     const seedNewFeatures = async () => {
         const newFeatures = [
+            // 🏷️ الروابط والصفحات الأساسية
+            { id: 'page_super_admin', name: 'لوحة القيادة العليا (Super Admin)', description: 'الوصول لإدارة المنصة، الباقات، والتحكم الكلي في السناتر' },
+            { id: 'page_admin_dashboard', name: 'لوحة تحكم الإدارة (Analytics)', description: 'الوصول للإحصائيات والرسوم البيانية المتقدمة' },
+            { id: 'page_staff_dashboard', name: 'لوحة تحكم الموظفين', description: 'الوصول للملخص السريع للموظفين' },
+            { id: 'page_sessions', name: 'إدارة الحصص والمجموعات', description: 'الوصول لإدارة الحصص، المدرسين، المجموعات، والمواد' },
+            { id: 'page_students', name: 'إدارة الطلاب ومتابعتهم', description: 'الوصول لصفحة الطلاب وبياناتهم المالية والأساسية' },
             { id: 'page_exams', name: 'الاختبارات والنتائج', description: 'الوصول لصفحة رصد الدرجات وإدارة الامتحانات' },
-            { id: 'page_subscriptions', name: 'إدارة الاشتراكات الشهرية', description: 'الوصول لصفحة تحصيل ومتابعة الاشتراكات الشهرية' },
-            { id: 'page_staff_permissions', name: 'نظام أذونات الوصول', description: 'التحكم في وصول الموظفين للصفحات والعمليات' },
+            { id: 'page_schedule', name: 'الجدول الدراسي', description: 'الوصول لجدول المواعيد الأسبوعي' },
+            { id: 'page_subscriptions', name: 'إدارة الاشتراكات الشهرية', description: 'التحكم في تحصيل ومتابعة الاشتراكات الشهرية للطلاب' },
+            { id: 'page_store', name: 'المتجر والملازم', description: 'الوصول لنظام المبيعات والملازم' },
+            { id: 'page_finance_wallets', name: 'نظام شحن المحافظ', description: 'تفعيل شحن رصيد المحافظ للطلاب' },
+            { id: 'page_finance_expenses', name: 'إدارة المصروفات', description: 'تسجيل ومتابعة المصروفات الخارجية للمركز' },
+            { id: 'page_support', name: 'نظام تذاكر الدعم', description: 'تواصل الطلاب مع الدعم الفني' },
+            { id: 'page_notifications', name: 'مركز البث الإخباري', description: 'إرسال إشعارات عامة لكل الطلاب' },
+            { id: 'page_staff', name: 'إدارة الموظفين والمناديب', description: 'إدارة بيانات الموظفين وصلاحياتهم' },
+            { id: 'page_staff_permissions', name: 'نظام أذونات الوصول', description: 'التحكم الدقيق في أذونات الموظفين' },
+            { id: 'page_settings', name: 'إدارة الإعدادات والبراند', description: 'التحكم في اللوجو، الألوان، واسم السنتر' },
+            { id: 'page_audit', name: 'سجل الرقابة (Audit)', description: 'متابعة سجل العمليات التي قام بها الموظفين' },
+            { id: 'page_lessons', name: 'المحتوى الرقمي (LMS)', description: 'تفعيل رفع الفيديوهات والحصص الأونلاين' },
+            { id: 'page_vouchers', name: 'نظام أكواد الشحن', description: 'توليد وبيع أكواد شحن الرصيد للطلاب' },
+
+            // ⚡ صلاحيات العمليات الحساسة (Actions)
             { id: 'action_add_exam', name: 'إضافة اختبارات', description: 'صلاحية إنشاء اختبار جديد' },
-            { id: 'action_publish_results', name: 'نشر النتائج', description: 'صلاحية نشر النتائج للطلاب وإرسال واتساب' },
-            { id: 'action_edit_exam', name: 'تعديل الاختبارات', description: 'صلاحية تعديل بيانات الاختبار' },
-            { id: 'action_delete_exam', name: 'حذف الاختبارات', description: 'صلاحية حذف سجلات الاختبارات' }
+            { id: 'action_publish_results', name: 'نشر النتائج', description: 'صلاحية نشر النتائج وإرسال واتساب للطلاب' },
         ];
 
         try {
@@ -436,20 +507,22 @@ export default function SuperAdminDashboard() {
                                 </div>
                             </div>
 
-                            {/* صحة النظام */}
+                            {/* صحة النظام الفنية */}
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center justify-between overflow-hidden relative hover:shadow-md transition-shadow">
-                                <div className="relative z-10">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">صحة الداتابيز</p>
-                                    <h3 className="text-3xl font-black text-slate-900">{totalStats.dbUsage} <span className="text-xs text-slate-400">MB</span></h3>
-                                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2">
-                                        <div 
-                                            className={`h-full rounded-full transition-all duration-1000 ${Number(totalStats.dbUsage) > 400 ? 'bg-red-500' : 'bg-blue-600'}`} 
-                                            style={{ width: `${Math.min((totalStats.dbUsage / 500) * 100, 100)}%` }}
-                                        ></div>
+                                <div className="relative z-10 w-full">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">نبض النظام (Live)</p>
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${latency < 200 ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                                            {latency} ms
+                                        </span>
                                     </div>
-                                </div>
-                                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner z-10">
-                                    <FaPowerOff size={24} />
+                                    <h3 className="text-3xl font-black text-slate-900 flex items-baseline gap-2">
+                                        {totalStats.dbUsage} <span className="text-xs text-slate-400">MB</span>
+                                    </h3>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <div className={`w-2 h-2 rounded-full ${latency !== -1 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                                        <span className="text-[10px] font-bold text-slate-500">{latency !== -1 ? 'متصل ومستقر' : 'عطل فني'}</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -570,7 +643,9 @@ export default function SuperAdminDashboard() {
                                 <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase">
                                     <tr>
                                         <th className="px-6 py-4">اسم السنتر</th>
+                                        <th className="px-6 py-4">النوع</th>
                                         <th className="px-6 py-4">الباقة الحالية</th>
+                                        <th className="px-6 py-4">الاستهلاك</th>
                                         <th className="px-6 py-4">تاريخ الانتهاء</th>
                                         <th className="px-6 py-4">الحالة</th>
                                         <th className="px-6 py-4 text-center">إجراءات</th>
@@ -584,7 +659,33 @@ export default function SuperAdminDashboard() {
                                         return (
                                             <tr key={center.id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4 font-black text-slate-800">{center.name}</td>
+                                                {/* 🎭 نوع الأكاونت */}
+                                                <td className="px-6 py-4">
+                                                    <button
+                                                        onClick={() => toggleCenterType(center.id, center.center_type)}
+                                                        title="اضغط للتبديل"
+                                                        className={`flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-full transition-all hover:scale-105 ${
+                                                            center.center_type === 'instructor'
+                                                              ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
+                                                              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                                        }`}
+                                                    >
+                                                        {center.center_type === 'instructor' ? '👨‍🏫 مدرس' : '🏫 سنتر'}
+                                                    </button>
+                                                </td>
                                                 <td className="px-6 py-4 font-bold text-blue-600">{center.packages?.name || 'بدون باقة'}</td>
+                                                {/* 📊 استهلاك الداتا */}
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-xs font-black text-slate-800">{center.usageMB || '0.1'} MB</span>
+                                                        <div className="w-16 bg-slate-100 h-1 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full ${Number(center.usageMB) > 50 ? 'bg-orange-500' : 'bg-blue-500'}`} 
+                                                                style={{ width: `${Math.min((Number(center.usageMB) / 100) * 100, 100)}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`font-mono text-xs px-2 py-1 rounded-lg ${isExpired ? 'bg-red-100 text-red-600 font-black' : 'bg-slate-100 text-slate-600'}`}>
                                                         {center.subscription_end_date ? new Date(center.subscription_end_date).toLocaleDateString('ar-EG') : 'غير محدد'}

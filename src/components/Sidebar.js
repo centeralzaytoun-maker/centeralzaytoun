@@ -9,10 +9,10 @@ import {
   FaSignOutAlt, FaCog, FaUserShield, FaMoneyBillWave, 
   FaWallet, FaLayerGroup, FaObjectGroup, FaBullhorn, 
   FaCalendarAlt, FaChevronRight, FaChevronLeft, FaBars, FaStore, FaUserSecret,
-  FaHeadset, FaFileInvoiceDollar, FaHome, FaTimes, FaMoneyCheckAlt
+  FaHeadset, FaFileInvoiceDollar, FaHome, FaTimes, FaMoneyCheckAlt, FaCrown
 } from 'react-icons/fa';
 
-export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', centerName = 'مركز تعليمي', logoUrl = null }) {
+export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', centerName = 'مركز تعليمي', logoUrl = null, centerType = 'center', instructorTitle = null }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -27,7 +27,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
   const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
 
   const menuItems = [
-    { id: 'dashboard', label: 'الرئيسية (الموظفين)', href: '/admin/staff_dashboard', icon: <FaHome /> }, 
+    { id: 'dashboard', label: 'الرئيسية (الموظفين)', href: '/admin/staff_dashboard', icon: <FaHome />, feature: 'dashboard:staff' }, 
     { id: 'sessions', label: 'إدارة الحصص', href: '/admin/sessions', icon: <FaChalkboardTeacher />, feature: 'academic:sessions' }, 
     { id: 'students', label: 'الطلاب', href: '/admin/students', icon: <FaUsers />, feature: 'students:view' }, 
     { id: 'instructors', label: 'المدرسين', href: '/admin/instructors', icon: <FaChalkboardTeacher />, feature: 'academic:sessions' }, 
@@ -41,16 +41,19 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     { id: 'finance_debts', label: 'المديونيات', href: '/admin/finance/debts', icon: <FaMoneyBillWave />, feature: 'students:finance' },
     { id: 'finance_wallets', label: 'شحن المحافظ', href: '/admin/finance/wallets', icon: <FaWallet />, feature: 'wallet:view' },
     { id: 'subscriptions', label: 'الاشتراكات الشهرية', href: '/admin/subscriptions', icon: <FaMoneyCheckAlt />, feature: 'page_subscriptions' }, 
+    { id: 'lessons', label: 'المحتوى الرقمي', href: '/admin/lessons', icon: <FaChalkboardTeacher />, feature: 'lessons:view' }, 
+    { id: 'vouchers', label: 'أكواد الشحن', href: '/admin/vouchers', icon: <FaMoneyBillWave />, feature: 'vouchers:view' }, 
   ];
 
   const adminItems = [
-    { id: 'dash', label: 'الرئيسية (الإدارة)', href: '/admin/dashboard', icon: <FaChartBar /> }, 
+    { id: 'dash', label: 'الرئيسية (الإدارة)', href: '/admin/dashboard', icon: <FaChartBar />, feature: 'dashboard:admin' }, 
     { id: 'staff', label: 'الموظفين', href: '/admin/staff', icon: <FaUserShield />, feature: 'staff:view' }, 
     { id: 'settings', label: 'الإعدادات', href: '/admin/settings', icon: <FaCog />, feature: 'settings:general' }, 
     { id: 'permissions', label: 'أذونات الموظفين', href: '/admin/staff/permissions', icon: <FaUserShield />, feature: 'page_staff_permissions' },
     { id: 'finance_expenses', label: 'المصروفات', href: '/admin/expenses', icon: <FaFileInvoiceDollar />, feature: 'expenses:view' },
     { id: 'subs_mgmt', label: 'تحصيل الاشتراكات', href: '/admin/subscriptions', icon: <FaMoneyCheckAlt />, feature: 'page_subscriptions' },
     { id: 'audit', label: 'سجل الرقابة', href: '/admin/audit', icon: <FaUserSecret />, feature: 'logs:view' },
+    { id: 'super_admin', label: 'لوحة القيادة العليا', href: '/super-admin', icon: <FaCrown />, feature: 'super_admin:access' },
   ];
 
   const visibleMenuItems = useMemo(() => {
@@ -60,23 +63,43 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
       
       if (!item.feature) return true; 
 
-      // 🛡️ خريطة الربط بين الصلاحية الوظيفية وميزة الباقة الأساسية
+      // 🛡️ خريطة الربط الشاملة بين (الصلاحية الوظيفية) و (ميزة الباقة الأساسية)
       const packageMapping = {
-        'students:view': 'page_students',
+        // إدارة الحصص والطلاب
+        'dashboard:staff':   'page_staff_dashboard', // 🛡️ لوحة الموظفين
         'academic:sessions': 'page_sessions',
+        'students:view':     'page_students',
         'academic:schedule': 'page_schedule',
-        'academic:exams': 'page_exams',
-        'store:sales': 'page_store',
-        'students:finance': 'page_students', // تبع شؤون الطلاب برضه
-        'wallet:view': 'page_finance_wallets',
+        'academic:exams':    'page_exams',
+        'students:finance':  'page_students',
+
+        // خدمات إضافية
+        'page_support':       'page_support',
+        'page_notifications': 'page_notifications',
+        'store:sales':        'page_store',
+        'wallet:view':        'page_finance_wallets',
         'page_subscriptions': 'page_subscriptions',
-        'page_staff_permissions': 'page_staff_permissions'
+        'lessons:view':       'page_lessons',
+        'vouchers:view':      'page_vouchers',
+
+        // إدارة النظام والرقابة
+        'staff:view':              'page_staff',
+        'settings:general':        'page_settings',
+        'page_staff_permissions':  'page_staff_permissions',
+        'expenses:view':           'page_finance_expenses',
+        'logs:view':               'page_audit',
+        'super_admin:access':     'page_super_admin'
       };
 
       const requiredModule = packageMapping[item.feature];
       
       // لو فيه ميزة باقة مرتبطة، والسنتر مش معاه الميزة دي -> اخفي العنصر فوراً
       if (requiredModule && !allowedFeatures?.includes(requiredModule)) return false;
+
+      // 🛡️ التحقق من الموديول (Flexibility Logic)
+      if (item.module && !allowedFeatures?.includes(`module_${item.module}`)) {
+          return false;
+      }
 
       // لو السنتر معاه الميزة، أو العنصر مش مرتبط بميزة باقة محددة، نتحقق من صلاحية اليوزر نفسه
       return allowedFeatures?.includes(item.feature);
@@ -91,10 +114,14 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
       if (!item.feature) return true; 
 
       const packageMapping = {
-        'expenses:view': 'page_finance_expenses',
-        'logs:view': 'page_audit',
-        'page_staff_permissions': 'page_staff_permissions',
-        'page_subscriptions': 'page_subscriptions'
+        'dashboard:admin':         'page_admin_dashboard', // 🛡️ لوحة الإدارة
+        'staff:view':              'page_staff',
+        'settings:general':        'page_settings',
+        'page_staff_permissions':  'page_staff_permissions',
+        'expenses:view':           'page_finance_expenses',
+        'page_subscriptions':      'page_subscriptions',
+        'logs:view':               'page_audit',
+        'super_admin:access':     'page_super_admin'
       };
 
       const requiredModule = packageMapping[item.feature];
@@ -153,10 +180,14 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
             {/* Clean Professional Logo Section */}
             <div 
               style={!logoUrl ? { backgroundColor: primaryColor } : {}}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-sm ${logoUrl ? 'p-0' : 'p-2'}`}
+              className={`flex items-center justify-center text-white flex-shrink-0 shadow-sm overflow-hidden ${
+                centerType === 'instructor'
+                  ? `w-11 h-11 rounded-full border-2 ${logoUrl ? 'p-0 border-white/50' : 'p-2 border-white/20'}`
+                  : `w-11 h-11 rounded-xl ${logoUrl ? 'p-0' : 'p-2'}`
+              }`}
             >
                {logoUrl ? (
-                 <img src={logoUrl} alt={centerName} className="w-full h-full object-contain rounded-xl" loading="lazy" />
+                 <img src={logoUrl} alt={centerName} className="w-full h-full object-cover" loading="lazy" />
                ) : (
                  <FaChalkboardTeacher size={24} />
                )}
