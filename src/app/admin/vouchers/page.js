@@ -27,6 +27,11 @@ export default function VouchersPage() {
   const [statusFilter, setStatusFilter] = useState('all'); // all, available, used
   const [selectedGrade, setSelectedGrade] = useState(''); 
   const [selectedCourseId, setSelectedCourseId] = useState('');
+  
+  // 🔍 New List Filters (Decoupled from generator)
+  const [listGrade, setListGrade] = useState('');
+  const [listCourseId, setListCourseId] = useState('');
+  
   const [count, setCount] = useState(10);
   
   // UI States
@@ -82,12 +87,13 @@ export default function VouchersPage() {
                            v.students?.name?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || 
                            (statusFilter === 'used' ? v.is_used : !v.is_used);
-      const matchesGrade = !selectedGrade || v.courses?.grade === selectedGrade;
-      const matchesCourse = !selectedCourseId || v.course_id === selectedCourseId;
+      
+      const matchesGrade = !listGrade || v.courses?.grade === listGrade;
+      const matchesCourse = !listCourseId || v.course_id === listCourseId;
       
       return matchesSearch && matchesStatus && matchesGrade && matchesCourse;
     });
-  }, [vouchers, searchTerm, statusFilter, selectedGrade, selectedCourseId]);
+  }, [vouchers, searchTerm, statusFilter, listGrade, listCourseId]);
 
   const generateVouchers = async () => {
     if (!selectedCourseId || count < 1) return toast.error('يرجى اختيار مادة وتحديد العدد');
@@ -188,6 +194,49 @@ export default function VouchersPage() {
             <div class="code-label">كود تفعيل الحصة / الكورس</div>
             <div class="code">${voucher.code}</div>
             <div class="footer">صالح للاستخدام لمرة واحدة فقط</div>
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handlePrintBatch = () => {
+    if (selectedIds.length === 0) return toast.error('يرجى تحديد الأكواد المطلوب طباعتها أولاً');
+    
+    const vouchersToPrint = vouchers.filter(v => selectedIds.includes(v.id));
+    const printWindow = window.open('', '_blank');
+    
+    const html = `
+      <html>
+        <head>
+          <title>طباعة مجموعة أكواد</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap');
+            body { font-family: 'Cairo', sans-serif; background: white; margin: 0; padding: 20px; }
+            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+            .card { border: 2px solid #e2e8f0; padding: 20px; border-radius: 15px; text-align: center; position: relative; break-inside: avoid; }
+            .logo { color: #2563eb; font-weight: 900; font-size: 14px; margin-bottom: 5px; }
+            .course { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 5px; }
+            .grade { font-size: 10px; color: #94a3b8; margin-bottom: 10px; }
+            .code { font-size: 18px; font-weight: 900; background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px dashed #cbd5e1; font-family: monospace; }
+            @media print {
+              @page { size: A4; margin: 1cm; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body onload="window.print(); window.close();">
+          <div class="grid">
+            ${vouchersToPrint.map(v => `
+              <div class="card">
+                <div class="logo">⚡ CLASORA VOUCHER</div>
+                <div class="course">${v.courses?.name}</div>
+                <div class="grade">${v.courses?.grade || ''}</div>
+                <div class="code">${v.code}</div>
+              </div>
+            `).join('')}
           </div>
         </body>
       </html>
@@ -319,7 +368,7 @@ export default function VouchersPage() {
         </AnimatePresence>
 
         {/* 🔍 Filter & Search Bar */}
-        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm mb-6 flex flex-wrap items-center gap-4">
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm mb-6 flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <FaSearch className="absolute top-1/2 -translate-y-1/2 right-5 text-slate-300" />
             <input 
@@ -330,7 +379,28 @@ export default function VouchersPage() {
               className="w-full h-14 pr-12 pl-4 bg-slate-50 border-none rounded-2xl text-sm font-bold outline-none focus:ring-2 ring-blue-100 transition-all"
             />
           </div>
-          <div className="flex gap-2 min-w-[150px]">
+
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <select 
+              value={listGrade}
+              onChange={(e) => { setListGrade(e.target.value); setListCourseId(''); }}
+              className="h-14 px-5 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none focus:ring-2 ring-blue-100 min-w-[140px]"
+            >
+              <option value="">كل الصفوف</option>
+              {stages.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+
+            <select 
+              value={listCourseId}
+              onChange={(e) => setListCourseId(e.target.value)}
+              className="h-14 px-5 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none focus:ring-2 ring-blue-100 min-w-[140px]"
+            >
+              <option value="">كل المواد</option>
+              {courses.filter(c => !listGrade || c.grade === listGrade).map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
             <select 
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -343,14 +413,24 @@ export default function VouchersPage() {
           </div>
           
           {selectedIds.length > 0 && (
-            <motion.button 
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              onClick={deleteBatch}
-              className="h-14 px-6 bg-red-50 text-red-600 rounded-2xl font-black text-xs flex items-center justify-center gap-2 border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-50"
-            >
-              <FaTrash /> حذف المحدد ({selectedIds.length})
-            </motion.button>
+            <div className="flex gap-2">
+              <motion.button 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                onClick={handlePrintBatch}
+                className="h-14 px-6 bg-blue-50 text-blue-600 rounded-2xl font-black text-xs flex items-center justify-center gap-2 border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-lg shadow-blue-50"
+              >
+                <FaPrint /> طباعة المحدد ({selectedIds.length})
+              </motion.button>
+              <motion.button 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                onClick={deleteBatch}
+                className="h-14 px-6 bg-red-50 text-red-600 rounded-2xl font-black text-xs flex items-center justify-center gap-2 border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-50"
+              >
+                <FaTrash /> حذف المحدد ({selectedIds.length})
+              </motion.button>
+            </div>
           )}
         </div>
 
