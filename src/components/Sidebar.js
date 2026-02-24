@@ -4,12 +4,14 @@ import { usePathname } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
 import { signOutAction } from '../app/auth-actions';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { 
   FaChartBar, FaUsers, FaBell, FaChalkboardTeacher, 
   FaSignOutAlt, FaCog, FaUserShield, FaMoneyBillWave, 
   FaWallet, FaLayerGroup, FaObjectGroup, FaBullhorn, 
   FaCalendarAlt, FaChevronRight, FaChevronLeft, FaBars, FaStore, FaUserSecret,
-  FaHeadset, FaFileInvoiceDollar, FaHome, FaTimes, FaMoneyCheckAlt, FaCrown
+  FaHeadset, FaFileInvoiceDollar, FaHome, FaTimes, FaMoneyCheckAlt, FaCrown,
+  FaQuestionCircle
 } from 'react-icons/fa';
 
 export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', centerName = 'مركز تعليمي', logoUrl = null, centerType = 'center', instructorTitle = null, instructorSubject = null }) {
@@ -17,11 +19,57 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   
-  const { allowedFeatures, loading } = useAuth(); 
+  const { allowedFeatures, loading, centerId } = useAuth(); 
+  const [inquiryCount, setInquiryCount] = useState(0);
 
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
+
+  // 🔔 Real-time Inquiries Notification System
+  useEffect(() => {
+    console.log('Sidebar Effect - centerId:', centerId);
+    if (!centerId) return;
+
+    const fetchCount = async () => {
+      console.log('Sidebar Debug - Fetching count for center:', centerId);
+      const { count, error } = await supabase
+        .from('lesson_discussions')
+        .select('*', { count: 'exact', head: true })
+        .eq('center_id', centerId)
+        .is('parent_id', null)
+        .eq('is_resolved', false);
+      
+      if (error) console.error('Sidebar Debug - Fetch error:', error);
+      console.log('Sidebar Debug - Count found:', count);
+      setInquiryCount(count || 0);
+    };
+
+    fetchCount();
+
+    // 🔄 Fallback polling every 60 seconds
+    const interval = setInterval(fetchCount, 60000);
+
+    const channel = supabase
+      .channel('discussions-count')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'lesson_discussions',
+        filter: `center_id=eq.${centerId}`
+      }, (payload) => {
+        console.log('Sidebar Debug - Real-time update received:', payload);
+        fetchCount();
+      })
+      .subscribe((status) => {
+        console.log('Sidebar Debug - Real-time subscription status:', status);
+      });
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [centerId]);
 
   const toggleSidebar = () => setIsOpen(!isOpen);
   const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
@@ -42,6 +90,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     { id: 'finance_wallets', label: 'شحن المحافظ', href: '/admin/finance/wallets', icon: <FaWallet />, feature: 'wallet:view' },
     { id: 'subscriptions', label: 'الاشتراكات الشهرية', href: '/admin/subscriptions', icon: <FaMoneyCheckAlt />, feature: 'page_subscriptions' }, 
     { id: 'lessons', label: 'المحتوى الرقمي', href: '/admin/lessons', icon: <FaChalkboardTeacher />, feature: 'lessons:view' }, 
+    { id: 'discussions', label: 'استفسارات الدروس', href: '/admin/discussions', icon: <FaQuestionCircle />, feature: 'page_courses' },
     { id: 'vouchers', label: 'أكواد الشحن', href: '/admin/vouchers', icon: <FaMoneyBillWave />, feature: 'vouchers:view' }, 
   ];
 
@@ -78,6 +127,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
         'wallet:view':        'page_finance_wallets',
         'page_subscriptions': 'page_subscriptions',
         'lessons:view':       'page_lessons',
+        'page_lessons':       'page_lessons',
         'vouchers:view':      'page_vouchers',
 
         // إدارة النظام والرقابة
@@ -246,9 +296,14 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
                   onMouseLeave={(e) => !isActive && (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
                   <span 
-                    className={`text-xl transition-colors`}
+                    className={`text-xl transition-colors relative`}
                     style={isActive ? { color: 'white' } : {}}
                   >
+                    {item.id === 'discussions' && (inquiryCount > 0) && (
+                      <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center animate-pulse shadow-xl shadow-red-500/40 border-2 border-white z-20">
+                        {inquiryCount}
+                      </div>
+                    )}
                     {item.icon}
                   </span>
                   <span className={`font-black text-sm whitespace-nowrap transition-all duration-300 origin-right

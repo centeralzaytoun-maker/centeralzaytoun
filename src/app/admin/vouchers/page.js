@@ -5,7 +5,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { 
   FaTicketAlt, FaPlus, FaTrash, FaFileExcel, 
   FaCopy, FaCheck, FaSyncAlt, FaSearch, 
-  FaFilter, FaArrowLeft, FaEye, FaPrint, FaBolt
+  FaFilter, FaArrowLeft, FaEye, FaPrint, FaBolt,
+  FaChevronDown, FaChevronUp, FaFolder, FaBookOpen, FaCaretDown, FaFileAlt
 } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
@@ -32,6 +33,11 @@ export default function VouchersPage() {
   // 🔍 New List Filters (Decoupled from generator)
   const [listGrade, setListGrade] = useState('');
   const [listCourseId, setListCourseId] = useState('');
+  const [targetTypeFilter, setTargetTypeFilter] = useState('all'); // all, course, chapter, lesson
+  const [availableChapters, setAvailableChapters] = useState([]); // For the generator
+  const [availableLessons, setAvailableLessons] = useState([]); 
+  const [selectedTargetId, setSelectedTargetId] = useState('full'); // 'full', 'ch_UUID', or 'ls_UUID'
+  const [showTargetDropdown, setShowTargetDropdown] = useState(false);
   
   const [count, setCount] = useState(10);
   
@@ -57,7 +63,7 @@ export default function VouchersPage() {
       const [stagesRes, coursesRes, vouchersRes, settings] = await Promise.all([
         supabaseBrowser.from('educational_stages').select('*').eq('center_id', centerId).order('sort_order', { ascending: true }),
         supabaseBrowser.from('courses').select('id, name, grade, instructors(name)').eq('center_id', centerId),
-        supabaseBrowser.from('recharge_codes').select('*, courses(name, grade), students(name)').eq('center_id', centerId).order('created_at', { ascending: false }),
+        supabaseBrowser.from('recharge_codes').select('*, courses(name, grade), lesson_chapters(title), lessons(title), students(name)').eq('center_id', centerId).order('created_at', { ascending: false }),
         getCenterSettings(centerId)
       ]);
 
@@ -66,19 +72,41 @@ export default function VouchersPage() {
       setVouchers(vouchersRes.data || []);
       setCenterSettings(settings);
     } catch (error) {
-      toast.error('خطأ في تحميل البيانات');
+      console.error('Fetch Initial Data Error:', error);
+      toast.error('خطأ في تحميل البيانات. تأكد من تشغيل ملف التحديث SQL.');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (selectedCourseId) {
+      Promise.all([
+        supabaseBrowser.from('lesson_chapters').select('id, title').eq('course_id', selectedCourseId).order('order_index'),
+        supabaseBrowser.from('lessons').select('id, title, chapter_id').eq('course_id', selectedCourseId).order('order_index')
+      ]).then(([chRes, lsRes]) => {
+        setAvailableChapters(chRes.data || []);
+        setAvailableLessons(lsRes.data || []);
+      });
+    } else {
+      setAvailableChapters([]);
+      setAvailableLessons([]);
+    }
+  }, [selectedCourseId]);
+
   const fetchVouchers = async () => {
-    const { data } = await supabaseBrowser
+    const { data, error } = await supabaseBrowser
       .from('recharge_codes')
-      .select('*, courses(name, grade), students(name)')
+      .select('*, courses(name, grade), lesson_chapters(title), lessons(title), students(name)')
       .eq('center_id', centerId)
       .order('created_at', { ascending: false });
-    setVouchers(data || []);
+    
+    if (error) {
+      console.error('Fetch Vouchers Error:', error);
+      toast.error('خطأ في تحديث القائمة');
+    } else {
+      setVouchers(data || []);
+    }
   };
 
   // 🧪 Logic
@@ -92,16 +120,21 @@ export default function VouchersPage() {
   const filteredVouchers = useMemo(() => {
     return vouchers.filter(v => {
       const matchesSearch = v.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           v.students?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+                           v.students?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           v.lesson_chapters?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           v.lessons?.title?.toLowerCase().includes(searchTerm.toLowerCase());
+                           
       const matchesStatus = statusFilter === 'all' || 
                            (statusFilter === 'used' ? v.is_used : !v.is_used);
       
       const matchesGrade = !listGrade || v.courses?.grade === listGrade;
       const matchesCourse = !listCourseId || v.course_id === listCourseId;
+
+      const matchesTargetType = targetTypeFilter === 'all' || v.target_type === targetTypeFilter;
       
-      return matchesSearch && matchesStatus && matchesGrade && matchesCourse;
+      return matchesSearch && matchesStatus && matchesGrade && matchesCourse && matchesTargetType;
     });
-  }, [vouchers, searchTerm, statusFilter, listGrade, listCourseId]);
+  }, [vouchers, searchTerm, statusFilter, listGrade, listCourseId, targetTypeFilter]);
 
   const paginatedVouchers = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -113,7 +146,7 @@ export default function VouchersPage() {
   // Reset to first page when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, listGrade, listCourseId]);
+  }, [searchTerm, statusFilter, listGrade, listCourseId, targetTypeFilter]);
 
   const generateVouchers = async () => {
     if (!selectedCourseId || count < 1) return toast.error('يرجى اختيار مادة وتحديد العدد');
@@ -126,10 +159,26 @@ export default function VouchersPage() {
     for (let i = 0; i < count; i++) {
       // 🔐 توليد كود أكثر أماناً وطولاً
       const code = `${prefix}-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      
+      let lesson_id = null;
+      let chapter_id = null;
+      let target_type = 'course';
+
+      if (selectedTargetId.startsWith('ch_')) {
+        chapter_id = selectedTargetId.replace('ch_', '');
+        target_type = 'chapter';
+      } else if (selectedTargetId.startsWith('ls_')) {
+        lesson_id = selectedTargetId.replace('ls_', '');
+        target_type = 'lesson';
+      }
+
       newVouchers.push({
         center_id: centerId,
         code,
         course_id: selectedCourseId,
+        lesson_id,
+        chapter_id,
+        target_type,
         type: 'course_unlock',
         is_used: false
       });
@@ -142,7 +191,8 @@ export default function VouchersPage() {
       await fetchVouchers();
       setShowGenerator(false);
     } else {
-      toast.error('حدث خطأ أثناء التوليد');
+      console.error('Generate Vouchers Error:', error);
+      toast.error(`فشل التوليد: ${error.message}. هل قمت بتشغيل ملف الـ SQL؟`);
     }
     setIsGenerating(false);
   };
@@ -346,12 +396,16 @@ export default function VouchersPage() {
         <AnimatePresence>
           {showGenerator && (
             <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden mb-10"
+              initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+              animate={{ 
+                height: 'auto', 
+                opacity: 1,
+                transitionEnd: { overflow: 'visible' } 
+              }}
+              exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
+              className="mb-10"
             >
-              <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-2xl relative">
+              <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-2xl relative z-50">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]"></div>
                 <h3 className="text-xl font-black mb-8 flex items-center gap-3">
                   <span className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg"><FaPlus size={14} /></span>
@@ -381,6 +435,117 @@ export default function VouchersPage() {
                         <option key={c.id} value={c.id} className="text-slate-900">{c.name} - {c.instructors?.name}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="lg:col-span-1 relative">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mr-1">المحتوى المستهدف (Target)</label>
+                    
+                    {/* 💎 PREMIUM CUSTOM DROPDOWN 💎 */}
+                    <div className="relative group/target">
+                      <button 
+                        onClick={() => setShowTargetDropdown(!showTargetDropdown)}
+                        disabled={!selectedCourseId}
+                        className={`w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-5 flex items-center justify-between text-sm font-bold transition-all backdrop-blur-md hover:bg-white/10 ${!selectedCourseId ? 'opacity-30 cursor-not-allowed' : ''}`}
+                      >
+                         <div className="flex items-center gap-3">
+                            {selectedTargetId === 'full' ? (
+                              <><span className="text-xl">🎁</span> <span className="text-blue-400">الكورس بالكامل</span></>
+                            ) : selectedTargetId.startsWith('ch_') ? (
+                              <><FaFolder className="text-indigo-400" /> <span>باب: {availableChapters.find(c => c.id === selectedTargetId.replace('ch_', ''))?.title}</span></>
+                            ) : (
+                              <><FaFileAlt className="text-emerald-400" /> <span>حصة: {availableLessons.find(l => l.id === selectedTargetId.replace('ls_', ''))?.title}</span></>
+                            )}
+                         </div>
+                         <FaCaretDown className={`transition-transform duration-300 ${showTargetDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {showTargetDropdown && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute top-full left-0 right-0 mt-3 bg-[#1e293b] border border-white/10 rounded-3xl shadow-3xl z-[100] overflow-hidden max-h-[400px] flex flex-col"
+                          >
+                             <div className="p-2 overflow-y-auto custom-scrollbar">
+                                {/* Option: Full Course */}
+                                <button 
+                                  onClick={() => { setSelectedTargetId('full'); setShowTargetDropdown(false); }}
+                                  className={`w-full text-right p-4 rounded-2xl transition-all flex items-center gap-3 mb-1 ${selectedTargetId === 'full' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-white/5 text-slate-300'}`}
+                                >
+                                   <span className="text-lg">🎁</span>
+                                   <div className="flex flex-col items-start text-right">
+                                      <span className="font-black text-sm">تفعيل الكورس بالكامل</span>
+                                      <span className="text-[10px] opacity-60">يفتح جميع الأبواب والحصص الحالية والمستقبلية</span>
+                                   </div>
+                                </button>
+
+                                <div className="h-px bg-white/5 my-2 mx-4"></div>
+
+                                {/* Hierarchical Chapters & Lessons */}
+                                {availableChapters.map(chapter => {
+                                   const chapterLessons = availableLessons.filter(l => l.chapter_id === chapter.id);
+                                   return (
+                                     <div key={chapter.id} className="mb-2">
+                                        {/* Chapter Select Button */}
+                                        <button 
+                                          onClick={() => { setSelectedTargetId(`ch_${chapter.id}`); setShowTargetDropdown(false); }}
+                                          className={`w-full text-right p-4 rounded-2xl transition-all flex items-center justify-between group/ch ${selectedTargetId === `ch_${chapter.id}` ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-white/5 text-slate-300'}`}
+                                        >
+                                           <div className="flex items-center gap-3">
+                                              <FaFolder className={selectedTargetId === `ch_${chapter.id}` ? 'text-white' : 'text-indigo-400'} />
+                                              <div className="flex flex-col items-start">
+                                                  <span className="font-black text-sm">{chapter.title}</span>
+                                                  <span className="text-[9px] opacity-60">📂 تفعيل الباب بالكامل ({chapterLessons.length} حصة)</span>
+                                              </div>
+                                           </div>
+                                           <div className={`px-2 py-1 rounded-lg text-[8px] font-black border ${selectedTargetId === `ch_${chapter.id}` ? 'bg-white/20 border-white/20' : 'bg-indigo-500/10 border-indigo-500/10 text-indigo-400 group-hover/ch:bg-indigo-500/20'}`}>
+                                              تفعيل الباب
+                                           </div>
+                                        </button>
+
+                                        {/* Lessons under this chapter */}
+                                        <div className="mr-6 border-r-2 border-white/5 pr-2 mt-1 space-y-1">
+                                           {chapterLessons.map(lesson => (
+                                              <button 
+                                                key={lesson.id}
+                                                onClick={() => { setSelectedTargetId(`ls_${lesson.id}`); setShowTargetDropdown(false); }}
+                                                className={`w-full text-right p-3 rounded-xl transition-all flex items-center gap-3 text-xs ${selectedTargetId === `ls_${lesson.id}` ? 'bg-emerald-600 text-white shadow-lg' : 'hover:bg-white/5 text-slate-400 hover:text-white'}`}
+                                              >
+                                                 <FaFileAlt className={selectedTargetId === `ls_${lesson.id}` ? 'text-white' : 'text-emerald-500/50'} size={10} />
+                                                 <span className="font-bold">{lesson.title}</span>
+                                              </button>
+                                           ))}
+                                        </div>
+                                     </div>
+                                   );
+                                })}
+
+                                {/* Lessons with NO chapter */}
+                                {availableLessons.filter(l => !l.chapter_id).length > 0 && (
+                                   <>
+                                     <div className="h-px bg-white/5 my-2 mx-4"></div>
+                                     <div className="px-4 py-2">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">حصص غير مصنفة</span>
+                                     </div>
+                                     <div className="space-y-1">
+                                        {availableLessons.filter(l => !l.chapter_id).map(lesson => (
+                                           <button 
+                                             key={lesson.id}
+                                             onClick={() => { setSelectedTargetId(`ls_${lesson.id}`); setShowTargetDropdown(false); }}
+                                             className={`w-full text-right p-3 rounded-xl transition-all flex items-center gap-3 text-xs ${selectedTargetId === `ls_${lesson.id}` ? 'bg-emerald-600 text-white shadow-lg' : 'hover:bg-white/5 text-slate-400 hover:text-white'}`}
+                                           >
+                                              <FaFileAlt className={selectedTargetId === `ls_${lesson.id}` ? 'text-white' : 'text-emerald-500/50'} size={10} />
+                                              <span className="font-bold">{lesson.title}</span>
+                                           </button>
+                                        ))}
+                                     </div>
+                                   </>
+                                )}
+                             </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mr-1">الكمية المطلوبة</label>
@@ -439,11 +604,22 @@ export default function VouchersPage() {
             </select>
 
             <select 
+              value={targetTypeFilter}
+              onChange={(e) => setTargetTypeFilter(e.target.value)}
+              className="h-14 px-5 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none focus:ring-2 ring-blue-100"
+            >
+              <option value="all">نوع المحتوى (الكل)</option>
+              <option value="course">🎁 كورس كامل</option>
+              <option value="chapter">📁 باب كامل</option>
+              <option value="lesson">📝 حصة فردية</option>
+            </select>
+
+            <select 
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="h-14 px-5 bg-slate-50 border-none rounded-2xl text-xs font-black outline-none focus:ring-2 ring-blue-100"
             >
-              <option value="all">كل الحالات</option>
+              <option value="all">حالة الكود (الكل)</option>
               <option value="available">متاح فقط ✅</option>
               <option value="used">مستخدم فقط ❌</option>
             </select>
@@ -529,7 +705,17 @@ export default function VouchersPage() {
                     </td>
                     <td className="px-6 py-5">
                       <p className="text-sm font-black text-slate-800">{v.courses?.name || 'مادة محذوفة'}</p>
-                      <span className="text-[10px] font-bold text-slate-400">الصف: {v.courses?.grade}</span>
+                      {v.lesson_chapters?.title ? (
+                         <span className="text-[10px] font-black text-indigo-400 bg-indigo-500/5 px-2 py-0.5 rounded-lg border border-indigo-500/10 flex items-center gap-1 w-fit mt-1">
+                            <FaPlus size={8} /> باب: {v.lesson_chapters.title}
+                         </span>
+                      ) : v.lessons?.title ? (
+                         <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100 flex items-center gap-1 w-fit mt-1">
+                            <FaBolt size={8} /> {v.lessons.title}
+                         </span>
+                      ) : (
+                         <span className="text-[10px] font-bold text-slate-400">الصف: {v.courses?.grade}</span>
+                      )}
                     </td>
                     <td className="px-6 py-5 text-center">
                       <span className={`inline-flex items-center gap-1.5 text-[9px] font-black px-3 py-1 rounded-full border ${v.is_used ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'}`}>

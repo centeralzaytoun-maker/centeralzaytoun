@@ -377,7 +377,7 @@ export default function StudentDashboard() {
       
       const { data: enrollment } = await supabase
         .from('students')
-        .select('name, group_ids, unique_id, wallet_balance, total_debt')
+        .select('name, group_ids, unique_id, wallet_balance, total_debt, enrolled_courses')
         .eq('id', userId)
         .eq('center_id', currentCenterId) // ← فلترة حسب المركز
         .single();
@@ -400,34 +400,42 @@ export default function StudentDashboard() {
           setMySchedule(schedule || []);
           await refreshStatsOnly(userId, enrollment.unique_id, groupIds);
         }
-      }
-      await refreshNotificationsOnly(userId);
-      const results = await fetchExamResults(userId, currentCenterId);
-      
-      // ✅ Fetch Electronic Exams
-      const { data: eExams } = await supabase
-        .from('exams')
-        .select('*')
-        .eq('center_id', currentCenterId)
-        .eq('is_published', true)
-        .eq('is_electronic', true);
-      
-      // Filter by group_id or course_id if applicable
-      const enrolledExams = eExams?.filter(ex => {
-        const studentGroups = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
-        const studentCourses = enrollment.enrolled_courses || [];
-        return (!ex.group_id || studentGroups.includes(ex.group_id)) && 
-               (!ex.course_id || studentCourses.includes(ex.course_id));
-      }) || [];
-      setElectronicExams(enrolledExams);
 
-      // Calculate badges after data is ready
-      const currentGroupIds = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
-      if (currentGroupIds.length > 0) {
-          const attendance = await getAttendanceStatsFrontend(enrollment.unique_id, currentGroupIds);
-          if (attendance) {
-              calculateBadges(attendance.attendance_rate, attendance.total_sessions, results);
-          }
+        await refreshNotificationsOnly(userId);
+        const results = await fetchExamResults(userId, currentCenterId);
+        
+        // ✅ Fetch Electronic Exams
+        const { data: eExams } = await supabase
+          .from('exams')
+          .select('*')
+          .eq('center_id', currentCenterId)
+          .eq('is_published', true)
+          .eq('is_electronic', true);
+        
+        // Filter by group_id or course_id if applicable
+        const enrolledExams = eExams?.filter(ex => {
+          const studentGroups = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
+          const studentCourses = enrollment.enrolled_courses || [];
+          return (!ex.group_id || studentGroups.includes(ex.group_id)) && 
+                 (!ex.course_id || studentCourses.includes(ex.course_id));
+        }) || [];
+        setElectronicExams(enrolledExams);
+
+        // Calculate badges after data is ready
+        const currentGroupIds = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
+        if (currentGroupIds.length > 0) {
+            const attendance = await getAttendanceStatsFrontend(enrollment.unique_id, currentGroupIds);
+            if (attendance) {
+                calculateBadges(attendance.attendance_rate, attendance.total_sessions, results);
+            }
+        }
+      } else {
+        // Handle case where student is not found for this center
+        console.warn('Student record not found for this user in center:', currentCenterId);
+        setStudentName('');
+        setUniqueCode('');
+        setMySchedule([]);
+        setElectronicExams([]);
       }
   };
 
@@ -1074,41 +1082,43 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* 📚 Digital Academy Section - WOW FACTOR */}
-      <div className="max-w-4xl mx-auto mb-12">
-        <Link href="/student/courses" className="block relative bg-white rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 shadow-xl border border-blue-50 group hover:shadow-2xl hover:shadow-blue-500/10 transition-all overflow-hidden border-b-8 border-blue-600">
-           <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-              <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500">
-                 <FaChalkboardTeacher size={36} />
-              </div>
-              <div className="text-center md:text-right flex-1">
-                 <h2 className="text-3xl font-black text-slate-800 mb-2">أكاديمية كلاسورا الرقمية 🚀</h2>
-                 <p className="text-sm md:text-base text-slate-500 font-bold leading-relaxed">
-                    من هنا ابدأ رحلتك الأونلاين! شاهد فيديوهات الشرح، حمّل المذكرات، وتابع حصصك المسجلة بجودة عالية وفي أي وقت.
-                 </p>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                 <div className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl font-black text-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    تصفح المواد الآن
-                 </div>
-                 <div className="flex -space-x-3 rtl:space-x-reverse">
-                    {[1,2,3,4].map(i => (
-                      <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 overflow-hidden">
-                         <img src={`https://i.pravatar.cc/100?u=${i+10}`} alt="student" />
-                      </div>
-                    ))}
-                    <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-[8px] font-black text-blue-600">+500</div>
-                 </div>
-              </div>
-           </div>
-
-           {/* Decorative UI elements */}
-           <div className="absolute top-0 left-0 p-8 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
-              <FaPlayCircle size={250} className="transform -rotate-12" />
-           </div>
-            <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-500/5 rounded-full blur-3xl"></div>
-        </Link>
-      </div>
+      {/* 📚 Digital Academy Section - WOW FACTOR - Only visible in instructor mode */}
+      {centerSettings.center_type === 'instructor' && (
+        <div className="max-w-4xl mx-auto mb-12 animate-in fade-in slide-in-from-bottom-4">
+          <Link href="/student/courses" className="block relative bg-white rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 shadow-xl border border-blue-50 group hover:shadow-2xl hover:shadow-blue-500/10 transition-all overflow-hidden border-b-8 border-blue-600">
+             <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
+                <div className="w-20 h-20 bg-blue-600 text-white rounded-[2rem] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-500">
+                   <FaChalkboardTeacher size={36} />
+                </div>
+                <div className="text-center md:text-right flex-1">
+                   <h2 className="text-3xl font-black text-slate-800 mb-2">أكاديمية كلاسورا الرقمية 🚀</h2>
+                   <p className="text-sm md:text-base text-slate-500 font-bold leading-relaxed">
+                      من هنا ابدأ رحلتك الأونلاين! شاهد فيديوهات الشرح، حمّل المذكرات، وتابع حصصك المسجلة بجودة عالية وفي أي وقت.
+                   </p>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                   <div className="bg-blue-50 text-blue-600 px-6 py-3 rounded-2xl font-black text-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      تصفح المواد الآن
+                   </div>
+                   <div className="flex -space-x-3 rtl:space-x-reverse">
+                      {[1,2,3,4].map(i => (
+                        <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 overflow-hidden">
+                           <img src={`https://i.pravatar.cc/100?u=${i+10}`} alt="student" />
+                        </div>
+                      ))}
+                      <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-[8px] font-black text-blue-600">+500</div>
+                   </div>
+                </div>
+             </div>
+  
+             {/* Decorative UI elements */}
+             <div className="absolute top-0 left-0 p-8 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
+                <FaPlayCircle size={250} className="transform -rotate-12" />
+             </div>
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-500/5 rounded-full blur-3xl"></div>
+          </Link>
+        </div>
+      )}
 
       {/* ⚡ Electronic Exams Section */}
       {electronicExams.length > 0 && (

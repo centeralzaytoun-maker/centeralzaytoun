@@ -199,9 +199,13 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
                         const currentDeviceId = getDeviceFingerprint();
                         const registeredDevices = studentProfile.registered_devices || [];
                         const maxDevices = studentProfile.max_devices || 1;
+                        
+                        // 🛠️ Development Bypass: Allow all devices on localhost
+                        const isLocalhost = typeof window !== 'undefined' && 
+                            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-                        if (registeredDevices.includes(currentDeviceId)) {
-                            // الجهاز مسجل فعلاً
+                        if (registeredDevices.includes(currentDeviceId) || isLocalhost) {
+                            // الجهاز مسجل فعلاً أو بيئة تطوير
                             setIsDeviceAuthorized(true);
                         } else if (registeredDevices.length < maxDevices) {
                             // جهاز جديد وهناك مكان شاغر: سجله
@@ -215,7 +219,7 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
                         } else {
                             // جهاز زائد عن الحد: لا تطرده، ولكن امنع المحتوى
                             setIsDeviceAuthorized(false);
-                            console.error("🛑 Device limit reached for content access");
+                            console.warn("🛑 Device limit reached for content access. (Only enforced on production)");
                         }
                     }
                 }
@@ -316,13 +320,20 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
   }, [pathname]);
 
   const signOut = async () => {
+    const currentRole = role;
     await supabase.auth.signOut();
     setUser(null);
     setCenterId(null);
     setRole(null);
     setAllowedFeatures(null);
     localStorage.removeItem("active_center_id");
-    router.push('/login');
+    
+    // التوجيه الذكي بعد تسجيل الخروج
+    if (currentRole === 'student') {
+      router.push('/login');
+    } else {
+      router.push('/admin-login');
+    }
   };
 
   const value = {

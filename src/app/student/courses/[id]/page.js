@@ -6,8 +6,11 @@ import { useAuth } from '../../../../context/AuthContext';
 import SmartPlayer from '../../../../components/SmartPlayer';
 import { 
   FaLock, FaCheckCircle, FaPlayCircle, FaFilePdf, 
-  FaQuestionCircle, FaArrowRight, FaBars, FaTimes 
+  FaQuestionCircle, FaArrowRight, FaBars, FaTimes, 
+  FaChevronDown, FaChevronUp, FaLockOpen, FaClock, FaRocket, FaTrophy, FaChevronLeft
 } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 
 export default function StudentCourseView() {
   const { id: courseId } = useParams();
@@ -15,16 +18,26 @@ export default function StudentCourseView() {
   const { user, centerId } = useAuth();
   
   const [course, setCourse] = useState(null);
+  const [chapters, setChapters] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [studentData, setStudentData] = useState(null);
-  const [progress, setProgress] = useState([]);       // lesson IDs that are completed
-  const [watchData, setWatchData] = useState({});      // ⏱️ { lessonId: { resumePosition, watchedSeconds } }
+  const [progress, setProgress] = useState([]);       
+  const [unlockedChapters, setUnlockedChapters] = useState([]);
+  const [unlockedLessons, setUnlockedLessons] = useState([]);
+  const [watchData, setWatchData] = useState({});      
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const lastSaveRef = useRef({});   // tracks last save timestamp per lesson
+  const [expandedChapters, setExpandedChapters] = useState({});
+  const [isDiscussionOpen, setIsDiscussionOpen] = useState(false);
+  const [courseExams, setCourseExams] = useState([]);
+  const [discussions, setDiscussions] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+  const lastSaveRef = useRef({});
+  const currentTimeRef = useRef(0);
 
   useEffect(() => {
     if (user && centerId) {
@@ -35,11 +48,9 @@ export default function StudentCourseView() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      // 1. جلب بيانات الطالب
       const { data: std } = await supabase.from('students').select('*').eq('id', user.id).single();
       setStudentData(std);
 
-      // 2. التحقق من الاشتراك
       const { data: enrollment } = await supabase
         .from('student_online_enrollments')
         .select('*')
@@ -49,27 +60,40 @@ export default function StudentCourseView() {
       
       setIsEnrolled(!!enrollment);
 
-      // 3. جلب الكورس والدروس
       const { data: crs } = await supabase.from('courses').select('*, instructors(name)').eq('id', courseId).single();
       setCourse(crs);
 
-      const { data: lssns } = await supabase
-        .from('lessons')
+      // Fetch Chapters & Lessons
+      const [chaptersRes, lessonsRes] = await Promise.all([
+        supabase.from('lesson_chapters').select('*').eq('course_id', courseId).order('order_index'),
+        supabase.from('lessons').select('*').eq('course_id', courseId).order('order_index')
+      ]);
+
+      const now = new Date();
+      // Filter lessons by scheduling
+      const allLessons = (lessonsRes.data || []).filter(l => {
+        if (!l.scheduled_at) return true;
+        return new Date(l.scheduled_at) <= now;
+      });
+
+      setChapters(chaptersRes.data || []);
+      setLessons(allLessons);
+
+      const { data: examsRes } = await supabase
+        .from('exams')
         .select('*')
         .eq('course_id', courseId)
-        .order('order_index', { ascending: true });
-      
-      setLessons(lssns || []);
+        .eq('is_electronic', true);
+      setCourseExams(examsRes || []);
+      console.log("Fetched Exams for course:", courseId, examsRes);
 
-      // 4. جلب التقدم + بيانات المشاهدة
       const { data: prog } = await supabase
         .from('student_lesson_progress')
-        .select('lesson_id, resume_position, watched_seconds')
+        .select('lesson_id, resume_position, watched_seconds, is_completed')
         .eq('student_id', user.id);
 
       setProgress(prog?.filter(p => p.is_completed).map(p => p.lesson_id) || []);
 
-      // ⏱️ جدول watchData: { lessonId => { resumePosition, watchedSeconds } }
       const wd = {};
       prog?.forEach(p => {
         wd[p.lesson_id] = {
@@ -79,10 +103,22 @@ export default function StudentCourseView() {
       });
       setWatchData(wd);
 
-      // تحديد أول درس متاح
-      if (lssns?.length > 0) {
-        setSelectedLesson(lssns[0]);
+      // Fetch Individual Lesson & Chapter Unlocks
+      const [lessonUnlocks, chapterUnlocks] = await Promise.all([
+        supabase.from('student_lesson_access').select('lesson_id').eq('student_id', user.id).eq('course_id', courseId),
+        supabase.from('student_chapter_access').select('chapter_id').eq('student_id', user.id).eq('course_id', courseId)
+      ]);
+      
+      setUnlockedLessons(lessonUnlocks.data?.map(u => u.lesson_id) || []);
+      setUnlockedChapters(chapterUnlocks.data?.map(u => u.chapter_id) || []);
+
+      if (allLessons.length > 0) {
+        setSelectedLesson(allLessons[0]);
         setSelectedIndex(0);
+        // Expand the chapter of the first lesson
+        if (allLessons[0].chapter_id) {
+          setExpandedChapters({ [allLessons[0].chapter_id]: true });
+        }
       }
 
     } catch (err) {
@@ -92,17 +128,47 @@ export default function StudentCourseView() {
     }
   };
 
-  // ✅ حفظ التقدم بشكل مختلف عن الإكمال
+  const fetchDiscussions = async (lessonId) => {
+    if (!lessonId) return;
+    const { data } = await supabase
+      .from('lesson_discussions')
+      .select('*, students(name), staff_profiles(full_name)')
+      .eq('lesson_id', lessonId)
+      .order('created_at', { ascending: true });
+    setDiscussions(data || []);
+  };
+
+  const sendDiscussion = async () => {
+    if (!newComment.trim() || !selectedLesson || !user) return;
+    setSendingComment(true);
+    try {
+      const { error } = await supabase.from('lesson_discussions').insert([{
+        lesson_id: selectedLesson.id,
+        student_id: user.id,
+        message: newComment,
+        video_timestamp: currentTimeRef.current,
+        center_id: centerId
+      }]);
+      
+      if (!error) {
+        setNewComment('');
+        fetchDiscussions(selectedLesson.id);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSendingComment(false);
+    }
+  };
+
   const saveWatchProgress = async (lessonId, playedSeconds, watchedSeconds, totalDuration) => {
     if (!user || !lessonId) return;
-
-    // Throttle: save at most once every 10 seconds per lesson
-    const now = Date.now();
-    if (lastSaveRef.current[lessonId] && now - lastSaveRef.current[lessonId] < 10000) return;
-    lastSaveRef.current[lessonId] = now;
+    const nowTime = Date.now();
+    if (lastSaveRef.current[lessonId] && nowTime - lastSaveRef.current[lessonId] < 10000) return;
+    lastSaveRef.current[lessonId] = nowTime;
 
     const watchPct = totalDuration > 0 ? (watchedSeconds / totalDuration) : 0;
-    const isCompleted = watchPct >= 0.85;  // ❌ متينسدش غير 85%
+    const isCompleted = watchPct >= 0.85;
 
     await supabase.from('student_lesson_progress').upsert({
       student_id: user.id,
@@ -118,214 +184,421 @@ export default function StudentCourseView() {
       setProgress(prev => [...prev, lessonId]);
     }
 
-    // Update local watchData cache
     setWatchData(prev => ({
       ...prev,
       [lessonId]: { resumePosition: Math.floor(playedSeconds), watchedSeconds: Math.floor(watchedSeconds) }
     }));
+    currentTimeRef.current = playedSeconds;
   };
 
-  const watermarkText = studentData ? `${studentData.name} - ${studentData.phone || studentData.unique_id}` : 'Classora Secured';
-
-  // ⛓️ التحقق من الوصول التسلسلي
-  const isLessonAccessible = (index) => {
-    if (!course?.is_sequential) return true;      // التسلسل مش مفعّل
-    if (index === 0) return true;                  // الدرس الأول متاح دايماً
-    const prevLesson = lessons[index - 1];
+  const isLessonAccessible = (lesson, idx) => {
+    if (!course?.is_sequential) return true;
+    if (idx === 0) return true;
+    const prevLesson = lessons[idx - 1];
     return prevLesson ? progress.includes(prevLesson.id) : false;
   };
 
+  const toggleChapter = (id) => {
+    setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const watermarkText = studentData ? `${studentData.name} - ${studentData.phone || studentData.unique_id}` : 'Nexus Academy Secured';
+
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-10">
-      <div className="w-full max-w-4xl space-y-6">
-        <div className="h-64 bg-slate-200 rounded-[2.5rem] animate-pulse"></div>
-        <div className="grid grid-cols-4 gap-4">
-           <div className="col-span-3 h-12 bg-slate-200 rounded-xl animate-pulse"></div>
-           <div className="h-12 bg-slate-200 rounded-xl animate-pulse"></div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center space-y-6">
+       <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+       <p className="text-slate-500 font-black tracking-widest uppercase text-[10px] animate-pulse">Syncing Learning Experience...</p>
     </div>
   );
 
   if (!course) return <div className="p-20 text-center font-bold text-slate-400">الكورس غير موجود</div>;
 
-  const canWatchCurrent = (isEnrolled || selectedLesson?.is_free) && isLessonAccessible(selectedIndex);
+  const canWatchCurrent = (
+    isEnrolled || 
+    selectedLesson?.is_free || 
+    unlockedLessons.includes(selectedLesson?.id) ||
+    unlockedChapters.includes(selectedLesson?.chapter_id)
+  ) && isLessonAccessible(selectedLesson, selectedIndex);
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row h-screen overflow-hidden" dir="rtl">
+  return <div className="min-h-screen bg-[#020617] flex flex-col md:flex-row h-screen overflow-hidden selection:bg-blue-500/30 font-cairo" dir="rtl">
       
-      {/* Sidebar - الدروس */}
-      <aside className={`bg-white border-l border-slate-100 flex flex-col transition-all duration-300 z-30
-        ${sidebarOpen ? 'w-full md:w-80' : 'w-0 md:w-0 overflow-hidden'}
+      {/* 🏔️ Sidebar: Curriculum Engine */}
+      <aside className={`bg-[#0d152a] border-l border-white/5 flex flex-col transition-all duration-500 z-50 overflow-hidden
+        ${sidebarOpen ? 'w-full md:w-[26rem]' : 'w-0 md:w-0'}
         ${sidebarOpen ? 'fixed md:sticky' : 'hidden md:flex'} inset-y-0 right-0`}
       >
-        <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-          <h2 className="font-black text-slate-800 truncate">{course.name}</h2>
-          <button onClick={() => setSidebarOpen(false)} className="md:hidden text-slate-400"><FaTimes /></button>
+        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+           <div>
+              <h2 className="font-black text-white text-lg tracking-tight mb-1">{course.name}</h2>
+              <div className="flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live Curriculum</p>
+              </div>
+           </div>
+           <button onClick={() => setSidebarOpen(false)} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition-all"><FaTimes /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-           {course?.is_sequential && (
-             <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[11px] font-black px-3 py-2 rounded-xl mb-1">
-               <span>⛓️</span> هذا الكورس يُلزم بالتسلسل
-             </div>
-           )}
-           {lessons.map((lesson, index) => {
-             const isSubLocked = !isEnrolled && !lesson.is_free;
-             const isSeqLocked = !isSubLocked && !isLessonAccessible(index);
-             const isLocked = isSubLocked || isSeqLocked;
-             const isActive = selectedLesson?.id === lesson.id;
-             const isDone = progress.includes(lesson.id);
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+           
+           {/* General Lessons (No Chapter) */}
+           {lessons.filter(l => !l.chapter_id).map((lesson, idx) => (
+             <LessonItem 
+               key={lesson.id} 
+               lesson={lesson} 
+               idx={idx} 
+               isActive={selectedLesson?.id === lesson.id}
+               isDone={progress.includes(lesson.id)}
+               isLocked={(!isEnrolled && !lesson.is_free && !unlockedLessons.includes(lesson.id) && !unlockedChapters.includes(lesson.chapter_id)) || !isLessonAccessible(lesson, idx)}
+               onClick={() => { setSelectedLesson(lesson); setSelectedIndex(idx); if (window.innerWidth < 768) setSidebarOpen(false); }}
+             />
+           ))}
+
+           {/* Chapter Based Lessons */}
+           {chapters.map((chapter, cIdx) => {
+             const chapterLessons = lessons.filter(l => l.chapter_id === chapter.id);
+             if (chapterLessons.length === 0) return null;
+             const isExpanded = !!expandedChapters[chapter.id];
 
              return (
-               <button
-                 key={lesson.id}
-                 disabled={isSubLocked}
-                 onClick={() => {
-                    setSelectedLesson(lesson);
-                    setSelectedIndex(index);
-                    if (window.innerWidth < 768) setSidebarOpen(false);
-                 }}
-                 className={`w-full p-4 rounded-2xl border-2 transition-all flex items-start gap-4 text-right
-                   ${isActive ? 'border-blue-500 bg-blue-50/50' : 'border-slate-50 hover:border-slate-100 bg-white'}
-                   ${isSubLocked ? 'opacity-50 cursor-not-allowed' : 'opacity-100'}
-                 `}
-               >
-                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm
-                   ${isDone ? 'bg-green-100 text-green-600' 
-                   : isSeqLocked ? 'bg-indigo-100 text-indigo-400'
-                   : isSubLocked ? 'bg-red-100 text-red-400'
-                   : isActive ? 'bg-blue-600 text-white' 
-                   : 'bg-slate-100 text-slate-400'}
-                 `}>
-                   {isDone ? <FaCheckCircle /> 
-                   : isSeqLocked ? <span className="text-[10px]">⛓️</span>
-                   : isSubLocked ? <FaLock size={12} /> 
-                   : index + 1}
-                 </div>
-                 
-                 <div className="flex-1 overflow-hidden">
-                    <p className={`font-black text-sm truncate ${isActive ? 'text-blue-700' : 'text-slate-700'}`}>{lesson.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                       <span className="text-[10px] font-bold text-slate-400">حصة رقم {index + 1}</span>
-                       {lesson.is_free && <span className="text-[9px] font-black uppercase tracking-tighter bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">مجانية</span>}
-                       {isSeqLocked && <span className="text-[9px] font-black bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">أكمل السابقة أولاً</span>}
-                    </div>
-                 </div>
-               </button>
-             );
+               <div key={chapter.id} className="space-y-2">
+                  <button 
+                    onClick={() => toggleChapter(chapter.id)}
+                    className="w-full p-5 bg-white/[0.03] hover:bg-white/[0.05] rounded-[1.5rem] flex items-center justify-between transition-all group"
+                  >
+                     <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-600/10 text-blue-400 rounded-xl flex items-center justify-center font-black text-xs border border-blue-500/10">{cIdx + 1}</div>
+                        <div className="text-right">
+                           <h4 className="font-black text-slate-200 text-sm group-hover:text-white transition-colors">{chapter.title}</h4>
+                           <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-0.5">{chapterLessons.length} Sections Available</p>
+                        </div>
+                     </div>
+                     {isExpanded ? <FaChevronUp className="text-slate-600" size={12} /> : <FaChevronDown className="text-slate-600" size={12} />}
+                  </button>
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden space-y-2 pr-4 border-r border-white/5 mr-5"
+                      >
+                         {chapterLessons.map((lesson) => {
+                           const globalIdx = lessons.findIndex(l => l.id === lesson.id);
+                           const lessonExams = courseExams.filter(e => e.lesson_id === lesson.id);
+                           return (
+                            <div key={lesson.id} className="space-y-1">
+                              <LessonItem 
+                                lesson={lesson} 
+                                idx={globalIdx} 
+                                isActive={selectedLesson?.id === lesson.id}
+                                isDone={progress.includes(lesson.id)}
+                                isLocked={(!isEnrolled && !lesson.is_free && !unlockedLessons.includes(lesson.id) && !unlockedChapters.includes(lesson.chapter_id)) || !isLessonAccessible(lesson, globalIdx)}
+                                onClick={() => { setSelectedLesson(lesson); setSelectedIndex(globalIdx); if (window.innerWidth < 768) setSidebarOpen(false); }}
+                              />
+                              {lessonExams.map(exam => (
+                                <Link 
+                                  key={exam.id}
+                                  href={`/student/exams/${exam.id}`}
+                                  className="mx-2 p-3 bg-pink-600/10 hover:bg-pink-600/20 border border-pink-500/20 rounded-xl flex items-center justify-between group transition-all"
+                                >
+                                   <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 bg-pink-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-pink-500/20">
+                                         <FaTrophy size={12} />
+                                      </div>
+                                      <span className="text-[11px] font-black text-pink-400">تقييم: {exam.title}</span>
+                                   </div>
+                                   <FaChevronLeft className="text-pink-500/50" size={8} />
+                                </Link>
+                              ))}
+                            </div>
+                           );
+                         })}
+
+                         {/* Chapter Final Exams */}
+                         {courseExams.filter(e => e.chapter_id === chapter.id).map(exam => (
+                            <Link 
+                               key={exam.id}
+                               href={`/student/exams/${exam.id}`}
+                               className="mt-2 p-5 bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 rounded-[1.5rem] flex items-center justify-between group transition-all shadow-xl shadow-indigo-500/10"
+                            >
+                               <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-white/10 backdrop-blur-md text-white rounded-xl flex items-center justify-center border border-white/10 group-hover:rotate-12 transition-transform">
+                                     <FaTrophy size={16} />
+                                  </div>
+                                  <div className="text-right">
+                                     <h4 className="font-black text-white text-xs">امتحان الباب: {chapter.title}</h4>
+                                     <p className="text-[8px] font-black text-indigo-200 uppercase tracking-[0.2em] mt-1">{exam.title}</p>
+                                  </div>
+                                </div>
+                                <FaChevronLeft className="text-white/50" size={10} />
+                            </Link>
+                         ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+               </div>
+              );
            })}
+
+            {/* 🏆 Quick Assessments (General Exams Only) */}
+            {courseExams.filter(e => !e.lesson_id && !e.chapter_id).length > 0 && (
+              <div className="pt-6 border-t border-white/5 space-y-3">
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] px-2 mb-4 italic">التقييمات العامة</p>
+                 {courseExams.filter(e => !e.lesson_id && !e.chapter_id).map(exam => (
+                   <Link 
+                     key={exam.id}
+                     href={`/student/exams/${exam.id}`}
+                     className="w-full p-6 bg-gradient-to-br from-blue-600/10 to-indigo-600/5 hover:from-blue-600/20 hover:to-indigo-600/10 border border-blue-500/20 rounded-[2rem] flex items-center justify-between group transition-all shadow-xl shadow-blue-500/5 active:scale-95"
+                   >
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-blue-600/20 text-blue-400 rounded-xl flex items-center justify-center border border-blue-500/20 group-hover:rotate-12 transition-transform">
+                            <FaTrophy size={14} />
+                         </div>
+                         <div className="text-right">
+                            <h4 className="font-black text-slate-200 text-xs">{exam.title}</h4>
+                            <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mt-1">امتحان شامل للمادة</p>
+                         </div>
+                      </div>
+                      <FaChevronLeft className="text-blue-500" size={10} />
+                   </Link>
+                 ))}
+              </div>
+            )}
         </div>
       </aside>
 
-      {/* Main Content - المشغل */}
-      <main className="flex-1 flex flex-col h-full overflow-y-auto bg-slate-50/50">
-         {/* Top Bar Responsive */}
-         <div className="p-4 flex items-center justify-between md:hidden">
-            <button onClick={() => setSidebarOpen(true)} className="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-slate-600">
-               <FaBars />
-            </button>
-            <h1 className="font-black text-slate-800 text-sm">{course.name}</h1>
-            <button onClick={() => router.back()} className="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-slate-600">
-               <FaArrowRight />
+      {/* 📺 Main Theater: Video Production */}
+      <main className="flex-1 flex flex-col h-full overflow-y-auto bg-black relative">
+         
+         {/* Top Glass Bar */}
+         <div className="p-6 flex items-center justify-between bg-[#020617]/80 backdrop-blur-md border-b border-white/5 sticky top-0 z-40">
+            <div className="flex items-center gap-6">
+               {!sidebarOpen && (
+                 <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} onClick={() => setSidebarOpen(true)} className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/40">
+                    <FaBars />
+                 </motion.button>
+               )}
+               <div>
+                  <h1 className="font-black text-white text-base md:text-xl hidden md:block">{selectedLesson?.title || course.name}</h1>
+                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                     <FaRocket className="animate-bounce" /> Streaming Experience
+                  </p>
+               </div>
+            </div>
+            <button onClick={() => router.back()} className="h-12 px-6 bg-white/5 text-slate-400 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm hover:bg-white/10 transition-all">
+               العودة للمنصة <FaArrowRight size={12} />
             </button>
          </div>
 
-         <div className="p-4 md:p-8 flex-1">
-            <div className="max-w-5xl mx-auto space-y-6">
+         <div className="p-4 md:p-10 flex-1 max-w-6xl mx-auto w-full">
+            <div className="space-y-10">
                
-               {/* Player Section */}
-               {!selectedLesson ? (
-                  <div className="bg-white rounded-[2.5rem] p-20 text-center border border-slate-100 shadow-sm">
-                     <FaPlayCircle size={64} className="mx-auto text-slate-200 mb-6" />
-                     <h3 className="text-xl font-black text-slate-400">اختر درساً للبدء في المشاهدة</h3>
-                  </div>
-               ) : (
-                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-5 duration-700">
-                    
-                    {/* The Player Hook */}
-                    <div className="relative">
-                       {canWatchCurrent ? (
-                          <SmartPlayer 
-                            url={selectedLesson.video_url} 
-                            studentInfo={watermarkText}
-                            resumePosition={watchData[selectedLesson.id]?.resumePosition || 0}
-                            onProgress={(p) => {
-                              if (p.totalDuration > 0) {
-                                saveWatchProgress(
-                                  selectedLesson.id,
-                                  p.playedSeconds,
-                                  p.watchedSeconds,
-                                  p.totalDuration
-                                );
-                              }
-                            }}
-                          />
-                        ) : !isLessonAccessible(selectedIndex) ? (
-                          <div className="aspect-video bg-gradient-to-br from-indigo-950 to-slate-900 rounded-[2rem] flex flex-col items-center justify-center text-white p-10 text-center border-4 border-indigo-900/50">
-                             <div className="text-5xl mb-5">⛓️</div>
-                             <h2 className="text-2xl font-black mb-3">هذا الدرس مقفول</h2>
-                             <p className="text-indigo-300 max-w-sm mx-auto mb-2 font-bold">يجب عليك إتمام مشاهدة الدرس السابق أولاً</p>
-                             <p className="text-slate-500 text-sm font-bold bg-white/5 px-4 py-2 rounded-xl mt-1">«{lessons[selectedIndex - 1]?.title}»</p>
-                             <button
-                               onClick={() => { setSelectedLesson(lessons[selectedIndex - 1]); setSelectedIndex(selectedIndex - 1); }}
-                               className="mt-8 bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-2xl font-black shadow-xl shadow-indigo-500/20 transition"
-                             >
-                               ▶ انتقل للدرس السابق
-                             </button>
-                          </div>
+               {/* 📽️ Cinematic Player Layer */}
+               <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[2.5rem] blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
+                  <div className="relative bg-[#0d152a] rounded-[2.5rem] overflow-hidden border border-white/10 shadow-3xl">
+                     {selectedLesson ? (
+                        canWatchCurrent ? (
+                           <SmartPlayer 
+                             url={selectedLesson.video_url} 
+                             studentInfo={watermarkText}
+                             resumePosition={watchData[selectedLesson.id]?.resumePosition || 0}
+                             checkpoints={selectedLesson.checkpoints}
+                             onProgress={(p) => saveWatchProgress(selectedLesson.id, p.playedSeconds, p.watchedSeconds, p.totalDuration)}
+                           />
+                        ) : !isLessonAccessible(selectedLesson, selectedIndex) ? (
+                           <AccessGate type="sequential" lesson={lessons[selectedIndex - 1]} onGoPrev={() => { setSelectedLesson(lessons[selectedIndex - 1]); setSelectedIndex(selectedIndex - 1); }} />
                         ) : (
-                          <div className="aspect-video bg-slate-900 rounded-[2rem] flex flex-col items-center justify-center text-white p-10 text-center border-4 border-slate-200">
-                             <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mb-6">
-                                <FaLock size={40} className="text-amber-400" />
+                           <AccessGate type="enrol" onEnrol={() => router.push(`/student/checkout/${courseId}`)} />
+                        )
+                     ) : (
+                        <div className="aspect-video flex flex-col items-center justify-center text-slate-600 p-20 text-center">
+                           <FaPlayCircle size={80} className="mb-8 opacity-20" />
+                           <h2 className="text-2xl font-black italic">جاهز لرحلة العلم؟</h2>
+                           <p className="text-xs font-black uppercase tracking-[0.4em] mt-4">Select a chapter module to begin initialization</p>
+                        </div>
+                     )}
+                  </div>
+               </div>
+
+               {/* 📄 Documentation & Social Section */}
+               {selectedLesson && (
+                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.02] backdrop-blur-3xl p-10 rounded-[3.5rem] border border-white/5 shadow-2xl">
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 border-b border-white/5 pb-10 mb-10">
+                       <div className="space-y-3">
+                          <h1 className="text-3xl font-black text-white">{selectedLesson.title}</h1>
+                          <div className="flex items-center gap-6">
+                             <div className="flex items-center gap-2 text-slate-500 text-xs font-bold">
+                                <div className="w-8 h-8 rounded-full bg-blue-600/10 flex items-center justify-center text-blue-400 font-black">👨‍🏫</div>
+                                {course.instructors?.name || 'Classora Elite Faculty'}
                              </div>
-                             <h2 className="text-2xl font-black mb-4">هذه الحصة مغلقة 🔒</h2>
-                             <p className="text-slate-400 max-w-md mx-auto mb-8">يجب عليك تفعيل الكورس أولاً لمشاهدة هذا المحتوى.</p>
-                             <button 
-                               onClick={() => router.push(`/student/checkout/${courseId}`)}
-                               className="bg-blue-600 px-8 py-3 rounded-2xl font-black shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition"
-                             >
-                               تفعيل الكورس الآن
-                             </button>
-                          </div>
-                        )}
-                    </div>
-
-                    {/* Lesson Details */}
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-50 pb-6 mb-6">
-                          <div>
-                             <h1 className="text-2xl font-black text-slate-800">{selectedLesson.title}</h1>
-                             <p className="text-slate-400 text-sm mt-1 font-bold">بواسطة: {course.instructors?.name || course.instructor}</p>
-                          </div>
-                          
-                          <div className="flex gap-2 w-full md:w-auto">
-                             {selectedLesson.pdf_url && (
-                               <a 
-                                 href={selectedLesson.pdf_url} 
-                                 target="_blank" 
-                                 className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-50 text-slate-600 px-5 py-3 rounded-2xl font-black text-sm hover:bg-slate-100 transition"
-                               >
-                                 <FaFilePdf className="text-red-500" /> المذكرة
-                               </a>
+                             {selectedLesson.scheduled_at && (
+                                <div className="flex items-center gap-2 text-amber-500 text-xs font-bold bg-amber-500/5 px-4 py-1.5 rounded-full border border-amber-500/20">
+                                   <FaClock size={10} /> تم النشر في: {new Date(selectedLesson.scheduled_at).toLocaleDateString('ar-EG')}
+                                </div>
                              )}
-                             <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-50 text-slate-600 px-5 py-3 rounded-2xl font-black text-sm">
-                                <FaQuestionCircle className="text-blue-500" /> اسأل سؤال
-                             </button>
                           </div>
                        </div>
-
-                       <div className="text-slate-600 leading-relaxed font-bold">
-                          <p className="whitespace-pre-wrap">{selectedLesson.description || 'لا يوجد وصف متاح لهذه الحصة.'}</p>
+                       
+                       <div className="flex gap-4 w-full lg:w-auto">
+                          {selectedLesson.pdf_url && (
+                            <a href={selectedLesson.pdf_url} target="_blank" className="flex-1 lg:flex-none flex items-center justify-center gap-3 bg-red-600/10 text-red-500 px-8 py-4 rounded-[1.5rem] font-black text-sm border border-red-500/20 hover:bg-red-600 hover:text-white transition-all shadow-xl shadow-red-900/10">
+                               <FaFilePdf size={18} /> تحميل المذكرة
+                            </a>
+                          )}
+                          <button 
+                            onClick={() => { setIsDiscussionOpen(true); fetchDiscussions(selectedLesson.id); }}
+                            className="flex-1 lg:flex-none flex items-center justify-center gap-3 bg-white/5 text-slate-300 px-8 py-4 rounded-[1.5rem] font-black text-sm border border-white/10 hover:bg-blue-600 hover:text-white transition-all"
+                          >
+                             <FaQuestionCircle size={18} /> اسأل المعلم
+                          </button>
                        </div>
                     </div>
 
-                 </div>
+                    <div className="prose prose-invert max-w-none">
+                       <p className="text-slate-400 leading-relaxed font-bold text-lg whitespace-pre-wrap">{selectedLesson.description || 'استمتع بمشاهدة الدروس وتدوين ملاحظاتك بدقة للتفوق في منهجك الدراسي.'}</p>
+                    </div>
+                 </motion.div>
                )}
             </div>
          </div>
       </main>
 
+      {/* 💬 Discussion Drawer: Internal Communication */}
+      <AnimatePresence>
+        {isDiscussionOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsDiscussionOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+            />
+            <motion.div 
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+              className="fixed inset-y-0 left-0 w-full md:w-[32rem] bg-[#0d152a] z-[70] shadow-2xl border-r border-white/5 flex flex-col"
+            >
+               <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                  <div>
+                    <h3 className="font-black text-white text-xl">منطقة النقاشات</h3>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Direct Line to Your Instructor</p>
+                  </div>
+                  <button onClick={() => setIsDiscussionOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-slate-400 hover:text-white transition-all"><FaTimes /></button>
+               </div>
+
+               <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                  {discussions.length === 0 ? (
+                    <div className="py-20 text-center space-y-4 opacity-30">
+                       <FaQuestionCircle size={60} className="mx-auto" />
+                       <p className="font-black text-xs uppercase tracking-[0.3em]">No inquiries recorded yet</p>
+                    </div>
+                  ) : (
+                    discussions.map(disco => (
+                      <div key={disco.id} className={`space-y-3 ${disco.sender_type === 'staff' ? 'pr-8 border-r-2 border-blue-600/20 mr-2' : ''}`}>
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs border uppercase ${disco.sender_type === 'staff' ? 'bg-blue-600 text-white border-blue-500' : 'bg-blue-600/10 text-blue-400 border-blue-500/10'}`}>
+                                 {disco.sender_type === 'staff' ? 'T' : (disco.students?.name?.charAt(0) || 'S')}
+                               </div>
+                               <div>
+                                  <p className="font-black text-white text-sm">
+                                    {disco.sender_type === 'staff' ? (disco.staff_profiles?.full_name || 'المعلم') : disco.students?.name}
+                                    {disco.sender_type === 'staff' && <span className="mr-2 text-[8px] bg-blue-600 px-2 py-0.5 rounded-full uppercase">Teacher</span>}
+                                  </p>
+                                  <p className="text-[9px] text-slate-500 font-bold">{new Date(disco.created_at).toLocaleString('ar-EG')}</p>
+                               </div>
+                            </div>
+                            {disco.video_timestamp > 0 && disco.sender_type !== 'staff' && (
+                              <div className="px-3 py-1.5 bg-white/5 rounded-lg text-emerald-400 text-[9px] font-black flex items-center gap-2">
+                                 <FaClock size={8} /> {Math.floor(disco.video_timestamp / 60)}:{(Math.floor(disco.video_timestamp) % 60).toString().padStart(2, '0')}
+                              </div>
+                            )}
+                         </div>
+                         <div className={`p-6 rounded-[1.5rem] border relative ${disco.sender_type === 'staff' ? 'bg-blue-600/5 border-blue-600/10' : 'bg-white/[0.03] border-white/5'}`}>
+                            <p className="text-slate-300 text-sm leading-relaxed font-bold">{disco.message}</p>
+                            {disco.is_resolved && !disco.parent_id && <FaCheckCircle className="absolute -top-2 -left-2 text-emerald-500 bg-[#0d152a] rounded-full" size={20} />}
+                         </div>
+                      </div>
+                    ))
+                  )}
+               </div>
+
+               <div className="p-8 border-t border-white/5 bg-black/20">
+                  <div className="relative">
+                    <textarea 
+                      value={newComment}
+                      onChange={e => setNewComment(e.target.value)}
+                      placeholder="اكتب سؤالك أو استفسارك هنا للمدرب..."
+                      className="w-full h-32 bg-slate-900/50 border border-white/10 rounded-[2rem] p-6 text-sm font-bold text-white placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all resize-none"
+                    />
+                    <button 
+                      disabled={sendingComment || !newComment.trim()}
+                      onClick={sendDiscussion}
+                      className="absolute bottom-4 left-4 h-12 px-8 bg-blue-600 text-white rounded-xl font-black text-xs shadow-xl shadow-blue-900/40 hover:bg-blue-500 disabled:opacity-50 transition-all flex items-center gap-2"
+                    >
+                      {sendingComment ? 'جاري الإرسال...' : 'إرسال السؤال'}
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-600 font-black uppercase text-center mt-4 tracking-widest">Question will be linked to current video time</p>
+               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>;
+}
+
+// 🏛️ Private Sub-Components
+function LessonItem({ lesson, idx, isActive, isDone, isLocked, onClick }) {
+  return <motion.button
+      whileHover={{ x: -5 }}
+      onClick={onClick}
+      className={`w-full p-5 rounded-[2rem] border-2 transition-all flex items-start gap-4 text-right group
+        ${isActive ? 'border-blue-600/50 bg-blue-600/10 shadow-2xl shadow-blue-900/20' : 'border-white/5 bg-white/[0.01] hover:bg-white/5'}
+        ${isLocked ? 'opacity-60' : 'opacity-100'}
+      `}
+    >
+      <div className={`w-12 h-12 rounded-[1.2rem] flex items-center justify-center shrink-0 text-xs font-black shadow-lg
+        ${isDone ? 'bg-emerald-500 text-white shadow-emerald-900/40' 
+        : isLocked ? 'bg-slate-800 text-slate-600'
+        : isActive ? 'bg-blue-600 text-white' 
+        : 'bg-white/5 text-slate-500'}
+      `}>
+        {isDone ? <FaCheckCircle size={16} /> 
+        : isLocked ? <FaLock size={14} /> 
+        : (idx + 1).toString().padStart(2, '0')}
+      </div>
+      
+      <div className="flex-1 overflow-hidden">
+         <p className={`font-black text-sm truncate mb-1 transition-colors ${isActive ? 'text-blue-400' : 'text-slate-200 group-hover:text-white'}`}>{lesson.title}</p>
+         <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Digital Module</span>
+            {lesson.is_free && <span className="text-[8px] font-black bg-amber-500/20 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-lg uppercase">Prerelease</span>}
+         </div>
+      </div>
+    </motion.button>;
+}
+
+function AccessGate({ type, lesson, onGoPrev, onEnrol }) {
+   if (type === 'sequential') return (
+    <div className="aspect-video bg-[#020617] flex flex-col items-center justify-center text-white p-10 text-center relative overflow-hidden">
+       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600/10 blur-[100px] pointer-events-none"></div>
+       <div className="w-24 h-24 bg-blue-600/10 rounded-[2rem] flex items-center justify-center text-blue-500 mb-8 border border-blue-500/20 shadow-2xl"><FaLockOpen size={32} className="opacity-50" /></div>
+       <h2 className="text-3xl font-black mb-4 tracking-tight">المحتوى قيد الانتظار ⛓️</h2>
+       <p className="text-slate-500 max-w-sm mx-auto mb-10 font-black uppercase text-[10px] tracking-widest leading-loose">يجب إتمام المهمة السابقة أولاً لفتح هذا المستوى</p>
+       <button onClick={onGoPrev} className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black shadow-2xl shadow-blue-900/40 transition-all flex items-center gap-3 group">
+          <FaPlayCircle className="group-hover:animate-spin" /> ابدأ الدرس السابق: {lesson?.title}
+       </button>
     </div>
-  );
+   );
+
+   return (
+    <div className="aspect-video bg-[#020617] flex flex-col items-center justify-center text-white p-10 text-center relative overflow-hidden">
+       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-red-600/10 blur-[100px] pointer-events-none"></div>
+       <div className="w-24 h-24 bg-red-600/10 rounded-[2rem] flex items-center justify-center text-red-500 mb-8 border border-red-500/20 shadow-2xl"><FaLock size={32} /></div>
+       <h2 className="text-3xl font-black mb-4 tracking-tight text-red-500">حصة مغلقة 🔒</h2>
+       <p className="text-slate-500 max-w-sm mx-auto mb-10 font-bold italic text-sm">هذا المحتوى محمي. يمكنك تفعيل الحصة بشكل منفرد، أو تفعيل الباب، أو الكورس بالكامل باستخدام كود التفعيل الخاص بك.</p>
+       <button onClick={onEnrol} className="bg-white text-black px-12 py-4 rounded-2xl font-black shadow-2xl hover:bg-slate-200 transition-all uppercase tracking-widest text-xs">
+          تفعيل المحتوى الآن (ادخل الكود)
+       </button>
+    </div>
+   );
 }

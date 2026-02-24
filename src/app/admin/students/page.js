@@ -58,6 +58,7 @@ export default function StudentsPage() {
   const [stages, setStages] = useState([]); // المخزن الجديد للمراحل الدراسية
 
   const [centerConfig, setCenterConfig] = useState(null);
+  const [centerType, setCenterType] = useState('center'); // 🎭
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -240,9 +241,17 @@ export default function StudentsPage() {
         .maybeSingle();
 
       if (configData) {
-
         setCenterConfig(configData);
+      }
 
+      // Fetch center type
+      const { data: centerData } = await supabaseBrowser
+        .from('centers')
+        .select('center_type')
+        .eq('id', centerId)
+        .single();
+      if (centerData?.center_type) {
+        setCenterType(centerData.center_type);
       }
 
 
@@ -1033,7 +1042,8 @@ const handlePrintCard = (student) => {
       enrolled_courses: [], course_discounts: {}, group_ids: {}, enrollment_dates: {}, 
       has_wallet: false, is_free: false, unique_id: '', is_active: true,
       subscription_type: 'عادي', free_courses: [], center_only_courses: [],
-      monthly_courses: []
+      monthly_courses: [],
+      max_devices: 1
     });
 
     setIsEditing(false);
@@ -1922,18 +1932,23 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     </label>
                 </div>
 
-                <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100 min-h-[44px]">
-                    <span className="text-sm font-black text-blue-800 flex items-center gap-2">
-                         📱 أقصى عدد أجهزة:
-                    </span>
-                    <input 
-                        type="number" 
-                        min="1" max="10"
-                        value={formData.max_devices}
-                        onChange={(e) => setFormData({ ...formData, max_devices: parseInt(e.target.value) || 1 })}
-                        className="w-16 p-1 bg-white border-2 border-blue-200 rounded text-center font-black text-blue-700 outline-none focus:border-blue-500"
-                    />
-                </div>
+                {centerType === 'instructor' && (
+                    <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100 min-h-[44px]">
+                        <span className="text-sm font-black text-blue-800 flex items-center gap-2">
+                            📱 أقصى عدد أجهزة:
+                        </span>
+                        <input 
+                            type="number" 
+                            min="1" max="10"
+                            value={formData.max_devices ?? 1}
+                            onChange={(e) => {
+                                const val = e.target.value === '' ? '' : parseInt(e.target.value);
+                                setFormData({ ...formData, max_devices: val });
+                            }}
+                            className="w-16 p-1 bg-white border-2 border-blue-200 rounded text-center font-black text-blue-700 outline-none focus:border-blue-500"
+                        />
+                    </div>
+                )}
             </div>
 
 

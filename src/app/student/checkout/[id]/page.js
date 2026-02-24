@@ -15,12 +15,15 @@ export default function CourseActivationPage() {
   const [course, setCourse] = useState(null);
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMsg, setErrorMsg] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('voucher'); // voucher, online
+  const [centerSettings, setCenterSettings] = useState(null);
 
   useEffect(() => {
     if (courseId) {
-      supabase.from('courses').select('name').eq('id', courseId).single().then(({ data }) => setCourse(data));
+      supabase.from('courses').select('*, instructors(name)').eq('id', courseId).single().then(({ data }) => setCourse(data));
+      supabase.from('center_settings').select('*').eq('center_id', centerId).maybeSingle().then(({ data }) => setCenterSettings(data));
     }
-  }, [courseId]);
+  }, [courseId, centerId]);
 
   const handleActivate = async () => {
     if (!code) return;
@@ -58,23 +61,49 @@ export default function CourseActivationPage() {
         throw new Error('لم يتم العثور على بياناتك كطالب في الداتابيز، يرجى مراجعة الإدارة.');
       }
 
-      // 3. تفعيل الكورس للطالب
-      const { error: activateError } = await supabase
-        .from('student_online_enrollments')
-        .insert([{
-          student_id: studentRecord.id, // استخدام الـ ID المؤكد من الجدول
-          course_id: courseId,
-          center_id: centerId,
-          payment_method: 'voucher'
-        }]);
+      // 3. تفعيل (المادة أو الباب أو الحصة) بناءً على نوع الكود
+      if (voucher.target_type === 'chapter') {
+        // تفعيل باب كامل
+        const { error: chapterError } = await supabase
+          .from('student_chapter_access')
+          .upsert([{
+            student_id: studentRecord.id,
+            chapter_id: voucher.chapter_id,
+            course_id: courseId,
+            center_id: centerId
+          }]);
 
-      if (activateError) {
-        console.error('❌ Enrollment Error:', activateError);
-        if (activateError.code === '23505') throw new Error('أنت مشترك بالفعل في هذا الكورس');
-        throw activateError;
+        if (chapterError) throw chapterError;
+      } else if (voucher.target_type === 'lesson') {
+        // تفعيل حصة منفردة
+        const { error: lessonError } = await supabase
+          .from('student_lesson_access')
+          .upsert([{
+            student_id: studentRecord.id,
+            lesson_id: voucher.lesson_id,
+            course_id: courseId,
+            center_id: centerId
+          }]);
+
+        if (lessonError) throw lessonError;
+      } else {
+        // تفعيل المادة بالكامل
+        const { error: activateError } = await supabase
+          .from('student_online_enrollments')
+          .insert([{
+            student_id: studentRecord.id,
+            course_id: courseId,
+            center_id: centerId,
+            payment_method: 'voucher'
+          }]);
+
+        if (activateError) {
+          if (activateError.code === '23505') throw new Error('أنت مشترك بالفعل في هذا الكورس');
+          throw activateError;
+        }
       }
 
-      // 3. تحديث الكود كـ "مستخدم"
+      // 4. تحديث الكود كـ "مستخدم"
       await supabase
         .from('recharge_codes')
         .update({ 
@@ -106,7 +135,7 @@ export default function CourseActivationPage() {
             {status === 'success' ? <FaCheckCircle size={48} className="text-green-500 animate-bounce" /> : <FaTicketAlt size={48} />}
          </div>
 
-         <h1 className="text-2xl font-black text-slate-800 mb-2">تفعيل كورس الرقمي</h1>
+         <h1 className="text-2xl font-black text-slate-800 mb-2">تفعيل المحتوى الرقمي</h1>
          <p className="text-slate-500 font-bold mb-8">أنت على وشك تفعيل: <span className="text-blue-600">"{course?.name}"</span></p>
 
          {status === 'success' ? (
@@ -115,34 +144,69 @@ export default function CourseActivationPage() {
            </div>
          ) : (
            <div className="space-y-6">
-              <div>
-                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">أدخل كود الشحن</label>
-                 <input 
-                   type="text"
-                   value={code}
-                   onChange={(e) => setCode(e.target.value)}
-                   placeholder="CLS-XXXX-XXXX"
-                   className="w-full h-14 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 text-center font-black text-xl tracking-widest outline-none focus:border-blue-500 transition-all uppercase"
-                 />
+              
+              {/* 💳 Payment Method Selection */}
+              <div className="grid grid-cols-2 gap-3 mb-8">
+                 <button 
+                  onClick={() => setPaymentMethod('voucher')}
+                  className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${paymentMethod === 'voucher' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'}`}
+                 >
+                    <FaTicketAlt className={paymentMethod === 'voucher' ? 'text-blue-600' : 'text-slate-400'} size={20} />
+                    <span className={`text-[10px] font-black ${paymentMethod === 'voucher' ? 'text-blue-600' : 'text-slate-500'}`}>كود تفعيل</span>
+                 </button>
+                 <button 
+                  onClick={() => setPaymentMethod('online')}
+                  className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${paymentMethod === 'online' ? 'border-emerald-600 bg-emerald-50/50' : 'border-slate-100 hover:border-slate-200'}`}
+                 >
+                    <div className="flex gap-1">
+                       <FaTicketAlt className={paymentMethod === 'online' ? 'text-emerald-600' : 'text-slate-400'} size={20} />
+                    </div>
+                    <span className={`text-[10px] font-black ${paymentMethod === 'online' ? 'text-emerald-600' : 'text-slate-500'}`}>دفع إلكتروني (فوري)</span>
+                 </button>
               </div>
 
+              {paymentMethod === 'voucher' ? (
+                 <div className="animate-in slide-in-from-bottom-4 duration-500">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">أدخل كود الشحن</label>
+                    <input 
+                      type="text"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="CLS-XXXX-XXXX"
+                      className="w-full h-14 bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 text-center font-black text-xl tracking-widest outline-none focus:border-blue-500 transition-all uppercase mb-6"
+                    />
+                    <button 
+                      onClick={handleActivate}
+                      disabled={loading || !code}
+                      className="w-full h-14 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition hover:-translate-y-1 active:translate-y-0 disabled:opacity-50"
+                    >
+                      {loading ? 'جاري التحقق...' : 'تفعيل الكود الآن'}
+                    </button>
+                 </div>
+              ) : (
+                <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-4">
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">القيمة المطلوب دفعها</p>
+                       <div className="text-4xl font-black text-slate-900 text-center">{course?.price || 0} <span className="text-sm">ج.م</span></div>
+                    </div>
+                    <button 
+                      onClick={() => alert('سيتم تحويلك لبوابة Paymob بمجرد تفعيل الحساب')}
+                      className="w-full h-14 bg-emerald-600 text-white rounded-2xl font-black shadow-xl shadow-emerald-500/20 hover:bg-emerald-700 transition hover:-translate-y-1 active:translate-y-0 flex items-center justify-center gap-3"
+                    >
+                      <FaLock size={14} /> استخراج رقم دفع (فوري)
+                    </button>
+                </div>
+              )}
+
               {status === 'error' && (
-                <div className="flex items-center gap-2 justify-center text-red-500 font-bold text-sm bg-red-50 p-3 rounded-xl">
+                <div className="flex items-center gap-2 justify-center text-red-500 font-bold text-sm bg-red-50 p-3 rounded-xl mt-4">
                    <FaExclamationTriangle shrink={0} /> {errorMsg}
                 </div>
               )}
 
               <button 
-                onClick={handleActivate}
-                disabled={loading || !code}
-                className="w-full h-14 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition hover:-translate-y-1 active:translate-y-0 disabled:opacity-50"
-              >
-                {loading ? 'جاري التحقق...' : 'تفعيل الآن'}
-              </button>
-
-              <button 
                 onClick={() => router.back()}
-                className="text-slate-400 font-bold text-sm flex items-center justify-center gap-2 w-full mt-4"
+                className="text-slate-400 font-bold text-sm flex items-center justify-center gap-2 w-full mt-6"
               >
                 <FaArrowRight size={12} /> العودة للكورس
               </button>

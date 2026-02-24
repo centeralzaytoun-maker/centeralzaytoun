@@ -2,9 +2,10 @@
 
 import MovingWatermark from './VideoWatermark';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { FaExclamationTriangle, FaLock } from 'react-icons/fa';
+import { FaExclamationTriangle, FaLock, FaQuestionCircle, FaCheck, FaTimes } from 'react-icons/fa';
 import { Play } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Load YouTube IFrame API once globally
 let ytApiLoaded = false;
@@ -21,7 +22,7 @@ function loadYouTubeAPI(callback) {
   }
 }
 
-export default function SmartPlayer({ url, studentInfo, onProgress, resumePosition = 0 }) {
+export default function SmartPlayer({ url, studentInfo, onProgress, resumePosition = 0, checkpoints = [] }) {
   const { isDeviceAuthorized } = useAuth();
   const [hasMounted, setHasMounted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -41,6 +42,10 @@ export default function SmartPlayer({ url, studentInfo, onProgress, resumePositi
   const prevTimeRef = useRef(0);        // ⏱️ last polled time (for delta calc)
   const watchedSecsRef = useRef(0);     // ✅ actual seconds watched (no skip counting)
   const justUnlockedRef = useRef(false); // 🔒 guard for 85% toast (fires once)
+  const triggeredPointsRef = useRef(new Set()); // IDs of points already shown in this session
+  const [activeCheckpoint, setActiveCheckpoint] = useState(null);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [isWrong, setIsWrong] = useState(false);
 
   // 🎯 Extract YouTube ID
   const videoId = useMemo(() => {
@@ -62,9 +67,14 @@ export default function SmartPlayer({ url, studentInfo, onProgress, resumePositi
     setSeekingVal(null);
     setWatchedPct(0);
     setJustUnlocked(false);
+    setJustUnlocked(false);
+    setSelectedOption(null);
+    setIsWrong(false);
     prevTimeRef.current = 0;
     watchedSecsRef.current = 0;
     justUnlockedRef.current = false;
+    triggeredPointsRef.current.clear();
+    setActiveCheckpoint(null);
     if (ytPlayerRef.current) {
       ytPlayerRef.current.destroy();
       ytPlayerRef.current = null;
@@ -134,6 +144,21 @@ export default function SmartPlayer({ url, studentInfo, onProgress, resumePositi
                   // ✅ تحديث نسبة المشاهدة الفعلية
                   const wPct = Math.min(100, Math.round((watchedSecsRef.current / d) * 100));
                   setWatchedPct(wPct);
+
+                  //  Gemini Interactivity — Checkpoints Pulse
+                  if (checkpoints?.length > 0) {
+                    const hit = checkpoints.find(cp => {
+                      const cpTime = parseInt(cp.time);
+                      return Math.abs(cur - cpTime) < 1 && !triggeredPointsRef.current.has(cpTime);
+                    });
+
+                    if (hit) {
+                      triggeredPointsRef.current.add(parseInt(hit.time));
+                      ytPlayerRef.current.pauseVideo();
+                      setIsPlaying(false);
+                      setActiveCheckpoint(hit);
+                    }
+                  }
 
                   // ♊️ أول مرة يخترق 85% — أظهر التوست مرة واحدة فقط
                   if (wPct >= 85 && !justUnlockedRef.current) {
@@ -240,6 +265,76 @@ export default function SmartPlayer({ url, studentInfo, onProgress, resumePositi
           </div>
         </div>
       )}
+
+      {/* 🧩 Interactivity Checkpoint Overlay */}
+      <AnimatePresence>
+        {activeCheckpoint && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[110] bg-[#020617]/95 backdrop-blur-xl flex items-center justify-center p-8"
+          >
+             <div className="max-w-xl w-full text-center space-y-8">
+                <div className="flex justify-center">
+                   <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center text-blue-500 border border-blue-500/20 shadow-2xl animate-pulse">
+                      <FaQuestionCircle size={32} />
+                   </div>
+                </div>
+                <div className="space-y-4">
+                   <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">تحقق من الاستيعاب</h3>
+                   <h2 className="text-2xl md:text-3xl font-black text-white leading-tight">{activeCheckpoint.question}</h2>
+                </div>
+                
+                {/* 🔘 Interaction Options */}
+                <div className="grid grid-cols-1 gap-4 pt-4">
+                   {(activeCheckpoint.options || []).map((opt, idx) => (
+                      <motion.button
+                        key={idx}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                           setSelectedOption(idx);
+                           if (idx === activeCheckpoint.answer) {
+                              setIsWrong(false);
+                              setTimeout(() => {
+                                 setActiveCheckpoint(null);
+                                 setSelectedOption(null);
+                                 setIsWrong(false);
+                                 ytPlayerRef.current.playVideo();
+                              }, 800);
+                           } else {
+                              setIsWrong(true);
+                              setTimeout(() => setIsWrong(false), 500);
+                           }
+                        }}
+                        className={`w-full p-6 rounded-2xl border-2 font-black text-sm flex items-center justify-between transition-all group/opt
+                           ${selectedOption === idx 
+                              ? (idx === activeCheckpoint.answer ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-red-500 border-red-400 text-white shadow-lg shadow-red-900/40') 
+                              : 'bg-white/5 border-white/5 text-slate-300 hover:border-blue-500/30'
+                           }
+                           ${isWrong && selectedOption === idx ? 'animate-shake' : ''}
+                        `}
+                      >
+                         <span className="flex-1 text-right">{opt}</span>
+                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all
+                            ${selectedOption === idx 
+                               ? 'bg-white/20' 
+                               : 'bg-white/10 group-hover/opt:bg-blue-600/20'
+                            }
+                         `}>
+                            {selectedOption === idx 
+                               ? (idx === activeCheckpoint.answer ? <FaCheck /> : <FaTimes />) 
+                               : <span className="text-[10px] opacity-40">{idx + 1}</span>
+                            }
+                         </div>
+                      </motion.button>
+                   ))}
+                </div>
+                
+                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest pt-4">يجب الإجابة الصحيحة للمتابعة - محرك التدريس الذكي</p>
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ▶️ YOUTUBE PLAYER (hidden until play clicked) */}
       <div className={`absolute inset-0 z-10 ${showPlayer ? 'block' : 'hidden'}`}>

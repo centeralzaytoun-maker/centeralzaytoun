@@ -38,6 +38,10 @@ export default function ExamsPage() {
   const canPublish = allowedFeatures?.includes('action_publish_results');
   const canDelete = allowedFeatures?.includes('action_delete_exam');
   const canEdit = allowedFeatures?.includes('action_edit_exam');
+  
+  const [chapters, setChapters] = useState([]);
+  const [lessons, setLessons] = useState([]);
+  const [loadingScoped, setLoadingScoped] = useState(false);
 
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
@@ -52,7 +56,9 @@ export default function ExamsPage() {
     pass_percentage: 50,
     max_attempts: 1,
     shuffle_questions: true,
-    is_electronic: false // 🆕 تمييز الامتحان الإلكتروني عن الورقي
+    is_electronic: false,
+    chapter_id: '',
+    lesson_id: ''
   });
 
   const fetchData = useCallback(async () => {
@@ -79,6 +85,23 @@ export default function ExamsPage() {
     }
   }, [centerId]);
 
+  const fetchCourseStructure = async (courseId) => {
+    if (!courseId) return;
+    setLoadingScoped(true);
+    try {
+      const [chaptersRes, lessonsRes] = await Promise.all([
+        supabase.from('lesson_chapters').select('*').eq('course_id', courseId).order('order_index'),
+        supabase.from('lessons').select('*').eq('course_id', courseId).order('order_index')
+      ]);
+      setChapters(chaptersRes.data || []);
+      setLessons(lessonsRes.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingScoped(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -101,7 +124,10 @@ export default function ExamsPage() {
         pass_percentage: newExam.is_electronic ? (parseInt(newExam.pass_percentage) || 50) : null,
         max_attempts: newExam.is_electronic ? (parseInt(newExam.max_attempts) || 1) : null,
         shuffle_questions: newExam.shuffle_questions,
-        is_electronic: newExam.is_electronic
+        is_electronic: newExam.is_electronic,
+        chapter_id: newExam.chapter_id || null,
+        lesson_id: newExam.lesson_id || null,
+        is_published: true
       };
 
       const { data, error } = await supabase
@@ -114,7 +140,7 @@ export default function ExamsPage() {
       toast.success('تم إنشاء الاختبار بنجاح');
       fetchData();
       setShowAddModal(false);
-      setNewExam({ title: '', grade: '', course_id: '', group_id: '', max_score: 100, exam_date: new Date().toISOString().split('T')[0] });
+      setNewExam({ title: '', grade: '', course_id: '', group_id: '', chapter_id: '', lesson_id: '', max_score: 100, exam_date: new Date().toISOString().split('T')[0] });
     } catch (err) {
       toast.error(`فشل إنشاء الاختبار: ${err.message || 'خطأ غير معروف'}`);
     } finally {
@@ -138,6 +164,12 @@ export default function ExamsPage() {
 
   const [editingExam, setEditingExam] = useState(null);
 
+  useEffect(() => {
+    if (editingExam?.course_id) {
+      fetchCourseStructure(editingExam.course_id);
+    }
+  }, [editingExam?.course_id]);
+
   const handleEditExam = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -157,7 +189,10 @@ export default function ExamsPage() {
           pass_percentage: editingExam.is_electronic ? (parseInt(editingExam.pass_percentage) || 50) : null,
           max_attempts: editingExam.is_electronic ? (parseInt(editingExam.max_attempts) || 1) : null,
           shuffle_questions: editingExam.shuffle_questions,
-          is_electronic: editingExam.is_electronic
+          is_electronic: editingExam.is_electronic,
+          chapter_id: editingExam.chapter_id || null,
+          lesson_id: editingExam.lesson_id || null,
+          is_published: true
         })
         .eq('id', editingExam.id)
         .eq('center_id', centerId);
@@ -404,9 +439,9 @@ export default function ExamsPage() {
       )}
 
       {/* Add Exam Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-           <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-4xl p-8 md:p-12 animate-in zoom-in-95 duration-300">
+       {showAddModal && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
+            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-4xl p-8 md:p-10 my-auto animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-black mb-8 text-gray-800 flex items-center gap-3">
                  <FaPlus className="text-indigo-600" /> إنشاء اختبار جديد
               </h2>
@@ -440,8 +475,11 @@ export default function ExamsPage() {
                     <div className="space-y-2">
                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest mr-2">المادة (المدرس)</label>
                        <select 
-                         value={newExam.course_id}
-                         onChange={e => setNewExam({...newExam, course_id: e.target.value, group_id: ''})}
+                         value={newExam.course_id || ''}
+                         onChange={e => {
+                           setNewExam({...newExam, course_id: e.target.value, group_id: '', chapter_id: '', lesson_id: ''});
+                           fetchCourseStructure(e.target.value);
+                         }}
                          className={`w-full h-16 px-6 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all ${!newExam.grade && 'opacity-50 pointer-events-none'}`}
                          disabled={!newExam.grade}
                        >
@@ -454,7 +492,7 @@ export default function ExamsPage() {
                     <div className="space-y-2">
                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest mr-2">المجموعة</label>
                        <select 
-                         value={newExam.group_id}
+                         value={newExam.group_id || ''}
                          onChange={e => setNewExam({...newExam, group_id: e.target.value})}
                          className={`w-full h-16 px-6 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all ${!newExam.course_id && 'opacity-50 pointer-events-none'}`}
                          disabled={!newExam.course_id}
@@ -464,6 +502,33 @@ export default function ExamsPage() {
                        </select>
                     </div>
                  </div>
+
+                 {newExam.course_id && (
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mr-2">تخصيص لباب (اختياري)</label>
+                         <select 
+                           value={newExam.chapter_id || ''}
+                           onChange={e => setNewExam({...newExam, chapter_id: e.target.value, lesson_id: ''})}
+                           className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all"
+                         >
+                            <option value="">امتحان شامل على المادة</option>
+                            {chapters.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                         </select>
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mr-2">تخصيص لحصة (اختياري)</label>
+                         <select 
+                           value={newExam.lesson_id || ''}
+                           onChange={e => setNewExam({...newExam, lesson_id: e.target.value, chapter_id: ''})}
+                           className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all"
+                         >
+                            <option value="">ليس مرتبطاً بحصة</option>
+                            {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                         </select>
+                      </div>
+                    </div>
+                  )}
 
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -541,8 +606,8 @@ export default function ExamsPage() {
 
       {/* Edit Exam Modal */}
       {editingExam && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-           <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-4xl p-8 md:p-12 animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
+           <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-4xl p-8 md:p-10 my-auto animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-black mb-8 text-gray-800 flex items-center gap-3">
                  <FaEdit className="text-indigo-600" /> تعديل الاختبار
               </h2>
@@ -576,7 +641,7 @@ export default function ExamsPage() {
                     <div className="space-y-2">
                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest mr-2">المادة (المدرس)</label>
                        <select 
-                         value={editingExam.course_id}
+                         value={editingExam.course_id || ''}
                          onChange={e => setEditingExam({...editingExam, course_id: e.target.value, group_id: ''})}
                          className={`w-full h-16 px-6 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all ${!editingExam.grade && 'opacity-50 pointer-events-none'}`}
                          disabled={!editingExam.grade}
@@ -590,7 +655,7 @@ export default function ExamsPage() {
                     <div className="space-y-2">
                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest mr-2">المجموعة</label>
                        <select 
-                         value={editingExam.group_id}
+                         value={editingExam.group_id || ''}
                          onChange={e => setEditingExam({...editingExam, group_id: e.target.value})}
                          className={`w-full h-16 px-6 bg-gray-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all ${!editingExam.course_id && 'opacity-50 pointer-events-none'}`}
                          disabled={!editingExam.course_id}
@@ -600,6 +665,33 @@ export default function ExamsPage() {
                        </select>
                     </div>
                  </div>
+
+                 {editingExam.course_id && (
+                    <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mr-2">تخصيص لباب (اختياري)</label>
+                         <select 
+                           value={editingExam.chapter_id || ''}
+                           onChange={e => setEditingExam({...editingExam, chapter_id: e.target.value, lesson_id: ''})}
+                           className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all"
+                         >
+                            <option value="">امتحان شامل على المادة</option>
+                            {chapters.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                         </select>
+                      </div>
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mr-2">تخصيص لحصة (اختياري)</label>
+                         <select 
+                           value={editingExam.lesson_id || ''}
+                           onChange={e => setEditingExam({...editingExam, lesson_id: e.target.value, chapter_id: ''})}
+                           className="w-full h-14 px-6 bg-slate-50 border-2 border-transparent focus:border-indigo-600 rounded-2xl outline-none font-bold text-gray-800 transition-all"
+                         >
+                            <option value="">ليس مرتبطاً بحصة</option>
+                            {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                         </select>
+                      </div>
+                    </div>
+                  )}
 
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">

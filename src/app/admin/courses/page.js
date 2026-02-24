@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase-browser'; // تأكد من المسار حسب مشروعك
-import { FaBook, FaChalkboardTeacher, FaMoneyBillWave, FaEdit, FaTrash, FaLayerGroup, FaPlus, FaLock } from 'react-icons/fa';
+import { FaBook, FaChalkboardTeacher, FaMoneyBillWave, FaEdit, FaTrash, FaLayerGroup, FaPlus, FaLock, FaImage, FaUpload, FaSync } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
 
 export default function CoursesPage() {
@@ -32,6 +32,7 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState([]);
   const [instructorsList, setInstructorsList] = useState([]); // 🆕 قائمة المدرسين
   const [loading, setLoading] = useState(true);
+  const [centerType, setCenterType] = useState('center'); // 🎭
   
   // Form State
   const [isEditing, setIsEditing] = useState(false);
@@ -47,8 +48,10 @@ export default function CoursesPage() {
     price: '',
     center_tax: '',
     monthly_price: '',
-    is_sequential: false // ⛓️ إلزام بالتسلسل
+    is_sequential: false, // ⛓️ إلزام بالتسلسل
+    thumbnail_url: '' // 🖼️
   });
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
   // --- Fetch Stages (جلب المراحل الدراسية من الإعدادات) ---
 const fetchStages = async () => {
@@ -68,13 +71,20 @@ const fetchStages = async () => {
   }
 };
 
-useEffect(() => {
-  if (centerId) {
-    fetchInstructors();
-    fetchCourses();
-    fetchStages(); // 🆕 تحميل المراحل عند فتح الصفحة
-  }
-}, [centerId]);
+  const fetchCenterType = async () => {
+    if (!centerId) return;
+    const { data } = await supabase.from('centers').select('center_type').eq('id', centerId).single();
+    if (data?.center_type) setCenterType(data.center_type);
+  };
+
+  useEffect(() => {
+    if (centerId) {
+      fetchInstructors();
+      fetchCourses();
+      fetchStages();
+      fetchCenterType(); // 🆕
+    }
+  }, [centerId]);
 
   // --- 1. Fetch Instructors (جلب قائمة المدرسين) ---
   const fetchInstructors = async () => {
@@ -137,6 +147,7 @@ useEffect(() => {
         center_tax: parseFloat(formData.center_tax) || 0,
         monthly_price: parseFloat(formData.monthly_price) || 0,
         is_sequential: formData.is_sequential ?? false, // ⛓️
+        thumbnail_url: formData.thumbnail_url || '', // 🖼️
         center_id: centerId
       };
 
@@ -221,7 +232,8 @@ useEffect(() => {
       price: course.price,
       center_tax: course.center_tax || '',
       monthly_price: course.monthly_price || '',
-      is_sequential: course.is_sequential ?? false // ⛓️
+      is_sequential: course.is_sequential ?? false, // ⛓️
+      thumbnail_url: course.thumbnail_url || '' // 🖼️
     });
     setEditId(course.id);
     setIsEditing(true);
@@ -229,9 +241,35 @@ useEffect(() => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', instructor_id: '', grade: '', price: '', center_tax: '', monthly_price: '', is_sequential: false });
+    setFormData({ name: '', instructor_id: '', grade: '', price: '', center_tax: '', monthly_price: '', is_sequential: false, thumbnail_url: '' });
     setIsEditing(false);
     setEditId(null);
+  };
+
+  const handleThumbnailUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingThumbnail(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${centerId}-course-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('center-logos') // Reusing center-logos bucket for simplicity, or we can use another one
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('center-logos')
+        .getPublicUrl(fileName);
+
+      setFormData(prev => ({ ...prev, thumbnail_url: publicUrl }));
+      alert("تم رفع الصورة بنجاح! 🎉");
+    } catch (error) {
+      alert('فشل الرفع: ' + error.message);
+    } finally {
+      setUploadingThumbnail(false);
+    }
   };
 
   // --- Helper for Badge Colors ---
@@ -396,34 +434,66 @@ useEffect(() => {
                 </div>
             </div>
 
-            {/* ⛓️ إلزام بالتسلسل Toggle */}
-            <div className="col-span-1 sm:col-span-2 lg:col-span-5">
-              <div
-                onClick={() => setFormData(p => ({ ...p, is_sequential: !p.is_sequential }))}
-                className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 select-none
-                  ${formData.is_sequential
-                    ? 'border-indigo-400 bg-indigo-50'
-                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{formData.is_sequential ? '⛓️' : '🔓'}</span>
-                  <div>
-                    <p className={`font-black text-sm ${formData.is_sequential ? 'text-indigo-700' : 'text-gray-600'}`}>
-                      إلزام الطالب بالتسلسل
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      {formData.is_sequential
-                        ? 'الدرس التالي يُفتح فقط بعد إتمام السابق ✅'
-                        : 'الطالب حر في اختيار أي درس'}
-                    </p>
+            {/* 🖼️ صورة الكورس (Thumbnail) - تظهر فقط في وضع المدرس */}
+            {centerType === 'instructor' && (
+              <div className="col-span-1 sm:col-span-2 lg:col-span-5 border-t border-slate-100 pt-5 mt-2">
+                 <label className="block text-xs sm:text-sm font-black text-slate-700 mb-3 uppercase tracking-widest">صورة الكورس (Course Thumbnail)</label>
+                 <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-full md:w-60 h-32 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 overflow-hidden relative group">
+                       {formData.thumbnail_url ? (
+                          <img src={formData.thumbnail_url} className="w-full h-full object-cover" alt="" />
+                       ) : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
+                             <FaImage size={32} />
+                             <span className="text-[10px] font-bold mt-2">لا توجد صورة</span>
+                          </div>
+                       )}
+                       <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-pointer">
+                          <input type="file" hidden accept="image/*" onChange={handleThumbnailUpload} />
+                          <span className="bg-white text-black px-4 py-2 rounded-xl font-black text-xs flex items-center gap-2">
+                             {uploadingThumbnail ? <FaSync className="animate-spin" /> : <FaUpload />} 
+                             {uploadingThumbnail ? 'جاري الرفع...' : 'تغيير الصورة'}
+                          </span>
+                       </label>
+                    </div>
+                    <div className="flex-1 text-right">
+                       <p className="text-xs text-slate-500 font-bold mb-2">هذه الصورة ستظهر للطلاب عند تصفح الكورسات في الصفحة الرئيسية.</p>
+                       <p className="text-[10px] text-slate-400 font-black tracking-tighter uppercase italic">المقاس المقترح: 800×600 بكسل</p>
+                    </div>
+                 </div>
+              </div>
+            )}
+
+            {/* ⛓️ إلزام بالتسلسل Toggle - تظهر فقط في وضع المدرس */}
+            {centerType === 'instructor' && (
+              <div className="col-span-1 sm:col-span-2 lg:col-span-5">
+                <div
+                  onClick={() => setFormData(p => ({ ...p, is_sequential: !p.is_sequential }))}
+                  className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 select-none
+                    ${formData.is_sequential
+                      ? 'border-indigo-400 bg-indigo-50'
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{formData.is_sequential ? '⛓️' : '🔓'}</span>
+                    <div>
+                      <p className={`font-black text-sm ${formData.is_sequential ? 'text-indigo-700' : 'text-gray-600'}`}>
+                        إلزام الطالب بالتسلسل (Sequential Mode)
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {formData.is_sequential
+                          ? 'الدرس التالي يُفتح فقط بعد إتمام السابق ✅'
+                          : 'الطالب حر في اختيار أي درس'}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Toggle Switch */}
+                  <div className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${formData.is_sequential ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${formData.is_sequential ? 'right-1' : 'left-1'}`} />
                   </div>
                 </div>
-                {/* Toggle Switch */}
-                <div className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${formData.is_sequential ? 'bg-indigo-500' : 'bg-gray-300'}`}>
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${formData.is_sequential ? 'right-1' : 'left-1'}`} />
-                </div>
               </div>
-            </div>
+            )}
 
             {/* زر الحفظ */}
             <div className="col-span-1 sm:col-span-2 lg:col-span-5 mt-2">
@@ -454,13 +524,33 @@ useEffect(() => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
             {courses.map(course => (
                 <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition duration-300 group overflow-hidden">
+                    {/* Course Image - تظهر فقط في وضع المدرس */}
+                    {centerType === 'instructor' && (
+                        <div className="h-40 bg-slate-100 relative overflow-hidden">
+                           {course.thumbnail_url ? (
+                              <img src={course.thumbnail_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt="" />
+                           ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                 <FaImage size={40} />
+                              </div>
+                           )}
+                           <div className="absolute top-3 right-3">
+                              <span className={`text-[10px] sm:text-xs font-black px-3 py-1.5 rounded-xl shadow-lg border-2 ${getGradeColor(course.grade)}`}>
+                                 {course.grade}
+                              </span>
+                           </div>
+                        </div>
+                    )}
+
                     {/* Card Header */}
                     <div className="p-3 sm:p-4 md:p-5 border-b border-gray-50 flex justify-between items-start">
                         <div>
-                            <span className={`text-[10px] sm:text-xs font-bold px-2 py-1 rounded border ${getGradeColor(course.grade)}`}>
-                                {course.grade}
-                            </span>
-                            <h3 className="font-bold text-base sm:text-lg md:text-xl text-gray-800 mt-2 md:mt-3 group-hover:text-blue-600 transition">
+                            {centerType !== 'instructor' && (
+                                <span className={`text-[10px] sm:text-xs font-bold px-2 py-1 rounded border ${getGradeColor(course.grade)} mb-2 inline-block`}>
+                                    {course.grade}
+                                </span>
+                            )}
+                            <h3 className="font-bold text-base sm:text-lg md:text-xl text-gray-800 group-hover:text-blue-600 transition">
                                 {course.name}
                             </h3>
                         </div>
@@ -485,8 +575,8 @@ useEffect(() => {
                                 <span className="text-[9px] sm:text-[10px] font-bold text-blue-700">خصم: {course.center_tax || 0}ج</span>
                             </div>
                         </div>
-                        {/* ⛓️ Sequential Badge */}
-                        {course.is_sequential && (
+                        {/* ⛓️ Sequential Badge - يظهر فقط في وضع المدرس */}
+                        {centerType === 'instructor' && course.is_sequential && (
                           <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-black px-2.5 py-1.5 rounded-lg mb-3 w-fit">
                             <span>⛓️</span> إلزام بالتسلسل مفعّل
                           </div>

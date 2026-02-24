@@ -8,7 +8,7 @@ import {
   FaWhatsapp, FaExclamationTriangle, FaPhoneAlt, FaCode, FaTrash,
   FaDoorOpen, FaMapMarkerAlt, FaLayerGroup, FaSortNumericDown, FaCrown,
   FaCalendarAlt, FaMoneyBillWave, FaPaintBrush, FaFileAlt, FaCommentDots,
-  FaUserGraduate, FaPlus, FaTimes
+  FaUserGraduate, FaPlus, FaTimes,FaLock
 } from 'react-icons/fa';
 
 import AccessDenied from '../../../components/AccessDenied';
@@ -28,20 +28,20 @@ export default function SettingsPage() {
   // ── Core Settings State ──
   const [settings, setSettings] = useState({
     center_name: '',
-    primary_color: '#2563eb',
-    report_footer: '',
-    address: '',
-    whatsapp_template: '',
-    msg_debt: '',
-    msg_absent: '',
-    logo_url: '',
-    student_code_prefix: 'S',
-    debt_limit: 300,
     center_phone: '',
     next_student_code: 100000,
+    primary_color: '#FF4500',
+    secondary_color: '#111827',
+    hero_bg_color: '#FF4500',
     // Subscription info (read-only from centers table)
     package_name: '',
-    end_date: ''
+    end_date: '',
+    // Payment Gateway Settings (Paymob)
+    paymob_api_key: '',
+    paymob_integration_id_fawry: '',
+    paymob_integration_id_card: '',
+    paymob_iframe_id: '',
+    paymob_hmac_secret: ''
   });
 
   // 🎭 Identity Mode State
@@ -52,6 +52,19 @@ export default function SettingsPage() {
     instructor_bio: '',
     instructor_title: '',
     instructor_subject: '',
+    // Premium Branding Section
+    hero_title: '',
+    hero_subtitle: '',
+    hero_cta_text: 'اشترك دلوقتي !',
+    stats: [],
+    features: [],
+    social_links: [],
+    lifestyle_photo_url: '',
+    about_title: '',
+    about_description: '',
+    faqs: [],
+    marquee_text: 'The Legend Academy • Top Ranked in Egypt 2026 • Innovative Future •',
+    landing_page_template: 'elite',
   });
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -111,8 +124,17 @@ export default function SettingsPage() {
             logo_url: settingsData.logo_url || '',
             next_student_code: settingsData.next_student_code || 100000,
             student_code_prefix: settingsData.student_code_prefix || 'S',
+            primary_color: settingsData.primary_color || '#FF4500',
+            secondary_color: settingsData.secondary_color || '#111827',
+            hero_bg_color: settingsData.hero_bg_color || '#FF4500',
             package_name: centerData?.packages?.name || 'غير محدد',
-            end_date: centerData?.subscription_end_date || ''
+            end_date: centerData?.subscription_end_date || '',
+            // Payment Gateway
+            paymob_api_key: settingsData.paymob_api_key || '',
+            paymob_integration_id_fawry: settingsData.paymob_integration_id_fawry || '',
+            paymob_integration_id_card: settingsData.paymob_integration_id_card || '',
+            paymob_iframe_id: settingsData.paymob_iframe_id || '',
+            paymob_hmac_secret: settingsData.paymob_hmac_secret || ''
           });
           // 🎭 Identity Mode
           setInstructorFields({
@@ -121,6 +143,19 @@ export default function SettingsPage() {
             instructor_bio: settingsData.instructor_bio || '',
             instructor_title: settingsData.instructor_title || '',
             instructor_subject: settingsData.instructor_subject || '',
+            // Premium Branding
+            hero_title: settingsData.hero_title || '',
+            hero_subtitle: settingsData.hero_subtitle || '',
+            hero_cta_text: settingsData.hero_cta_text || 'اشترك دلوقتي !',
+            stats: settingsData.stats || [],
+            features: settingsData.features || [],
+            social_links: settingsData.social_links || [],
+            lifestyle_photo_url: settingsData.lifestyle_photo_url || '',
+            about_title: settingsData.about_title || '',
+            about_description: settingsData.about_description || '',
+            faqs: settingsData.faqs || [],
+            marquee_text: settingsData.marquee_text || '',
+            landing_page_template: settingsData.landing_page_template || 'elite',
           });
         } else {
           setSettings(prev => ({
@@ -186,24 +221,19 @@ export default function SettingsPage() {
         center_name: settings.center_name,
         address: settings.address,
         center_phone: settings.center_phone,
-        primary_color: settings.primary_color,
-        report_footer: settings.report_footer,
-        logo_url: settings.logo_url,
-        debt_limit: settings.debt_limit,
-        whatsapp_template: settings.whatsapp_template,
-        msg_debt: settings.msg_debt,
-        msg_absent: settings.msg_absent,
-        next_student_code: settings.next_student_code,
         student_code_prefix: settings.student_code_prefix,
+        primary_color: settings.primary_color,
+        secondary_color: settings.secondary_color,
         // 🎭 Instructor Mode fields
         ...instructorFields,
+        // 💳 Payment Gateway Fields
+        paymob_api_key: settings.paymob_api_key,
+        paymob_integration_id_fawry: settings.paymob_integration_id_fawry,
+        paymob_integration_id_card: settings.paymob_integration_id_card,
+        paymob_iframe_id: settings.paymob_iframe_id,
+        paymob_hmac_secret: settings.paymob_hmac_secret,
       }, { onConflict: 'center_id' });
 
-    // حفظ center_type في centers
-    await supabaseBrowser
-      .from('centers')
-      .update({ center_type: centerType })
-      .eq('id', center_id);
 
     if (error) {
       alert('حدث خطأ أثناء الحفظ: ' + error.message);
@@ -265,6 +295,92 @@ export default function SettingsPage() {
     } finally {
       setUploadingPhoto(false);
     }
+  };
+
+  const handleLifestylePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${center_id}-lifestyle-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabaseBrowser.storage
+        .from('center-logos')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabaseBrowser.storage
+        .from('center-logos')
+        .getPublicUrl(fileName);
+
+      setInstructorFields(prev => ({ ...prev, lifestyle_photo_url: publicUrl }));
+      alert("تم رفع الصورة العصرية! تأكد من الضغط على حفظ في الأسفل.");
+    } catch (error) {
+      alert('فشل الرفع: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 📝 Helpers for Branding Lists
+  const addStat = () => setInstructorFields(prev => ({ ...prev, stats: [...(prev.stats || []), { label: '', value: '' }] }));
+  const removeStat = (idx) => setInstructorFields(prev => ({ ...prev, stats: prev.stats.filter((_, i) => i !== idx) }));
+  const updateStat = (idx, f, v) => {
+    const newStats = [...instructorFields.stats];
+    newStats[idx][f] = v;
+    setInstructorFields(prev => ({ ...prev, stats: newStats }));
+  };
+
+  const addFeature = () => setInstructorFields(prev => ({ ...prev, features: [...(prev.features || []), { title: '', desc: '', icon_url: '' }] }));
+  const removeFeature = (idx) => setInstructorFields(prev => ({ ...prev, features: prev.features.filter((_, i) => i !== idx) }));
+  const updateFeature = (idx, f, v) => {
+    const newF = [...instructorFields.features];
+    newF[idx][f] = v;
+    setInstructorFields(prev => ({ ...prev, features: newF }));
+  };
+
+  const [uploadingFeatureIdx, setUploadingFeatureIdx] = useState(null);
+  const handleFeatureIconUpload = async (idx, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingFeatureIdx(idx);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${center_id}-feature-${idx}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabaseBrowser.storage
+        .from('center-logos')
+        .upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabaseBrowser.storage
+        .from('center-logos')
+        .getPublicUrl(fileName);
+      
+      const newF = [...instructorFields.features];
+      newF[idx]['icon_url'] = publicUrl;
+      setInstructorFields(prev => ({ ...prev, features: newF }));
+      alert("تم رفع الأيقونة!");
+    } catch (error) {
+      alert('فشل الرفع: ' + error.message);
+    } finally {
+      setUploadingFeatureIdx(null);
+    }
+  };
+
+  const addSocial = () => setInstructorFields(prev => ({ ...prev, social_links: [...(prev.social_links || []), { platform: 'youtube', url: '' }] }));
+  const removeSocial = (idx) => setInstructorFields(prev => ({ ...prev, social_links: prev.social_links.filter((_, i) => i !== idx) }));
+  const updateSocial = (idx, f, v) => {
+    const newS = [...instructorFields.social_links];
+    newS[idx][f] = v;
+    setInstructorFields(prev => ({ ...prev, social_links: newS }));
+  };
+
+  const addFaq = () => setInstructorFields(prev => ({ ...prev, faqs: [...(prev.faqs || []), { q: '', a: '' }] }));
+  const removeFaq = (idx) => setInstructorFields(prev => ({ ...prev, faqs: prev.faqs.filter((_, i) => i !== idx) }));
+  const updateFaq = (idx, f, v) => {
+    const newF = [...instructorFields.faqs];
+    newF[idx][f] = v;
+    setInstructorFields(prev => ({ ...prev, faqs: newF }));
   };
 
   // ══════════════════════════════════════════════════════
@@ -533,29 +649,17 @@ export default function SettingsPage() {
             </div>
           </div>
           {/* Toggle */}
-          <div className="flex bg-slate-100 rounded-2xl p-1 gap-1">
-            <button
-              type="button"
-              onClick={() => setCenterType('center')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all ${
-                centerType === 'center'
-                  ? 'bg-white text-blue-700 shadow-md'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              🏫 سنتر
-            </button>
-            <button
-              type="button"
-              onClick={() => setCenterType('instructor')}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all ${
-                centerType === 'instructor'
-                  ? 'bg-white text-violet-700 shadow-md'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              👨‍🏫 مدرس
-            </button>
+          <div className="flex items-center gap-2">
+            <div className={`px-5 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 shadow-sm border ${
+              centerType === 'instructor' 
+                ? 'bg-violet-50 text-violet-700 border-violet-100' 
+                : 'bg-blue-50 text-blue-700 border-blue-100'
+            }`}>
+              {centerType === 'instructor' ? '👨‍🏫 حساب مدرس' : '🏫 حساب سنتر عام'}
+            </div>
+            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 border border-slate-100" title="يتم التحكم في هذا الإعداد من قبل الإدارة فقط">
+              <FaLock size={12} />
+            </div>
           </div>
         </div>
 
@@ -636,6 +740,186 @@ export default function SettingsPage() {
                   placeholder="أستاذ رياضيات بخبرة 15 عام، متخصص في تأسيس طلاب الثانوية العامة..."
                 />
               </div>
+
+              {/* 💎 PREMIUM BRANDING SECTION 💎 */}
+              <div className="md:col-span-3 pt-10 mt-10 border-t border-slate-100">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-pink-600 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-100">
+                      <FaCrown className="text-white text-xl" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-slate-800 text-lg">براندنج الواجهة الرئيسية (Student Landing Page)</h3>
+                      <p className="text-[11px] text-slate-400 font-bold">تحكم في شكل وتجربة الطالب عند دخول المنصة</p>
+                    </div>
+                  </div>
+
+                  {/* Template Selector */}
+                  <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
+                    {[
+                      { id: 'elite', label: 'الأسطوري (Elite)', color: 'bg-[#FF4500]' },
+                      { id: 'modern', label: 'عصري (Modern)', color: 'bg-indigo-600' },
+                      { id: 'classic', label: 'أكاديمي (Classic)', color: 'bg-slate-800' }
+                    ].map(t => (
+                      <button 
+                        key={t.id}
+                        type="button"
+                        onClick={() => setInstructorFields(prev => ({ ...prev, landing_page_template: t.id }))}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all ${instructorFields.landing_page_template === t.id ? `${t.color} text-white shadow-lg shadow-black/20 scale-105` : 'text-slate-500 hover:bg-white'}`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Hero & CTA */}
+                  <div className="space-y-6 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">قسم الترحيب (Hero Section)</p>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-slate-500 mr-2">العنوان الرئيسي</label>
+                      <input type="text" value={instructorFields.hero_title} onChange={e => setInstructorFields(p => ({ ...p, hero_title: e.target.value }))} className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none font-black text-sm" placeholder="منصتك الأولى لتعلم وفهم الكيمياء" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-slate-500 mr-2">العنوان الفرعي</label>
+                      <textarea value={instructorFields.hero_subtitle} onChange={e => setInstructorFields(p => ({ ...p, hero_subtitle: e.target.value }))} className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-xs" placeholder="سواء كنت في أولى، تانية أو تالثة ثانوي.. أحنا هنا علشان نقفل الكيمياء سوا" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-black text-slate-500 mr-2">نص زر الاشتراك</label>
+                      <input type="text" value={instructorFields.hero_cta_text} onChange={e => setInstructorFields(p => ({ ...p, hero_cta_text: e.target.value }))} className="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none font-black text-sm" />
+                    </div>
+                  </div>
+
+                  {/* Secondary/Lifestyle Image */}
+                  <div className="space-y-6 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">صورة القسم العصرية (Lifestyle Photo)</p>
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-full h-48 bg-white rounded-3xl border border-slate-200 overflow-hidden relative group">
+                        {instructorFields.lifestyle_photo_url ? (
+                          <img src={instructorFields.lifestyle_photo_url} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-slate-200"><FaImage size={40} /></div>
+                        )}
+                        <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-pointer">
+                           <input type="file" hidden accept="image/*" onChange={handleLifestylePhotoUpload} />
+                           <span className="bg-white text-black px-4 py-2 rounded-xl font-black text-xs flex items-center gap-2"><FaUpload /> رفع صورة عصرية</span>
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold">تُستخدم هذه الصورة في قسم "عن المدرس" بستايل مودرن كما في Legend</p>
+                    </div>
+                  </div>
+
+                  {/* Stats Counter */}
+                  <div className="space-y-6 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">أرقام النجاح (Statistics)</p>
+                      <button onClick={addStat} className="w-8 h-8 bg-black text-white rounded-xl flex items-center justify-center"><FaPlus size={12} /></button>
+                    </div>
+                    <div className="space-y-3">
+                      {(instructorFields.stats || []).map((s, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                          <input type="text" placeholder="العنوان (مثلاً: طالب)" value={s.label} onChange={e => updateStat(i, 'label', e.target.value)} className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold" />
+                          <input type="text" placeholder="القيمة (مثلاً: +50K)" value={s.value} onChange={e => updateStat(i, 'value', e.target.value)} className="w-32 p-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-center text-blue-600" />
+                          <button onClick={() => removeStat(i)} className="text-red-400 hover:text-red-600 p-2"><FaTrash size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Features / Why Join */}
+                  <div className="space-y-6 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">مميزات المنصة (Benefit Grid)</p>
+                      <button onClick={addFeature} className="w-8 h-8 bg-black text-white rounded-xl flex items-center justify-center"><FaPlus size={12} /></button>
+                    </div>
+                    <div className="space-y-3">
+                      {(instructorFields.features || []).map((f, i) => (
+                        <div key={i} className="flex gap-2 items-start bg-white p-3 rounded-2xl border border-slate-200">
+                          <span className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] font-black">{i+1}</span>
+                          <div className="flex-1 space-y-2">
+                             <div className="flex items-center gap-2">
+                                <div className="w-10 h-10 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-center relative overflow-hidden group">
+                                   {f.icon_url ? (
+                                      <img src={f.icon_url} className="w-full h-full object-cover" alt="" />
+                                   ) : (
+                                      <FaImage className="text-slate-300" />
+                                   )}
+                                   <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                                      <input type="file" hidden accept="image/*" onChange={(e) => handleFeatureIconUpload(i, e)} />
+                                      {uploadingFeatureIdx === i ? <FaSync size={10} className="text-white animate-spin" /> : <FaUpload size={10} className="text-white" />}
+                                   </label>
+                                </div>
+                                <input type="text" placeholder="اسم الميزة" value={f.title} onChange={e => updateFeature(i, 'title', e.target.value)} className="flex-1 p-2 bg-slate-50 border-none rounded-lg text-xs font-black" />
+                             </div>
+                             <textarea placeholder="وصف الميزة" value={f.desc} onChange={e => updateFeature(i, 'desc', e.target.value)} className="w-full p-2 bg-slate-50 border-none rounded-lg text-[10px] font-bold" rows={2} />
+                          </div>
+                          <button onClick={() => removeFeature(i)} className="text-red-400 hover:text-red-600 p-2"><FaTrash size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Social Links */}
+                  <div className="md:col-span-2 space-y-6 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">روابط التواصل (Social Connections)</p>
+                      <button onClick={addSocial} className="w-8 h-8 bg-black text-white rounded-xl flex items-center justify-center"><FaPlus size={12} /></button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {(instructorFields.social_links || []).map((s, i) => (
+                        <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-200">
+                          <select value={s.platform} onChange={e => updateSocial(i, 'platform', e.target.value)} className="bg-slate-50 p-2 rounded-lg text-[10px] font-black outline-none border-none">
+                            <option value="youtube">YouTube</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="telegram">Telegram</option>
+                          </select>
+                          <input type="text" placeholder="الرابط الكامل (https://...)" value={s.url} onChange={e => updateSocial(i, 'url', e.target.value)} className="flex-1 p-2 bg-slate-50 border-none rounded-lg text-[10px] font-bold" />
+                          <button onClick={() => removeSocial(i)} className="text-red-400 hover:text-red-600 p-1"><FaTrash size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* FAQ & Marquee */}
+                  <div className="md:col-span-2 space-y-6 bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100">
+                    <div className="flex flex-col md:flex-row gap-8">
+                       {/* Marquee */}
+                       <div className="flex-1 space-y-2">
+                          <label className="text-[11px] font-black text-slate-500 mr-2 uppercase tracking-widest">شريط الأخبار المتحرك (Marquee)</label>
+                          <input 
+                            type="text" 
+                            value={instructorFields.marquee_text} 
+                            onChange={e => setInstructorFields(p => ({ ...p, marquee_text: e.target.value }))} 
+                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl outline-none font-bold text-xs" 
+                            placeholder="اكتب الجملة التي ستتحرك في الصفحة..." 
+                          />
+                          <p className="text-[10px] text-slate-400 font-bold px-2">افصل بين الجمل بـ • لجمالية أكثر</p>
+                       </div>
+
+                       {/* FAQs */}
+                       <div className="flex-[2] space-y-6">
+                         <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-black text-slate-500 mr-2 uppercase tracking-widest">الأسئلة الشائعة (FAQ)</label>
+                            <button onClick={addFaq} className="w-8 h-8 bg-black text-white rounded-xl flex items-center justify-center font-black text-xs hover:bg-orange-600 transition-colors"><FaPlus size={10} /></button>
+                         </div>
+                         <div className="space-y-3">
+                           {(instructorFields.faqs || []).map((faq, i) => (
+                             <div key={i} className="bg-white p-4 rounded-2xl border border-slate-200 space-y-2 group relative">
+                                <button onClick={() => removeFaq(i)} className="absolute -top-2 -left-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><FaTrash size={8} /></button>
+                                <input type="text" placeholder="السؤال" value={faq.q} onChange={e => updateFaq(i, 'q', e.target.value)} className="w-full p-2 bg-slate-50 border-none rounded-lg text-xs font-black" />
+                                <textarea placeholder="الإجابة" value={faq.a} onChange={e => updateFaq(i, 'a', e.target.value)} className="w-full p-2 bg-slate-50 border-none rounded-lg text-[10px] font-bold" rows={2} />
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* 🔮 Live Preview */}
@@ -687,8 +971,12 @@ export default function SettingsPage() {
               <FaBuilding className="text-white text-lg md:text-xl" />
             </div>
             <div>
-              <h2 className="font-black text-slate-800 text-base md:text-lg">هوية السنتر</h2>
-              <p className="text-[10px] md:text-[11px] text-slate-400 font-bold tracking-wide">إدارة الشعار ومعلومات التواصل الأساسية</p>
+              <h2 className="font-black text-slate-800 text-base md:text-lg">
+                {centerType === 'instructor' ? 'هوية المنصة / المدرس' : 'هوية السنتر'}
+              </h2>
+              <p className="text-[10px] md:text-[11px] text-slate-400 font-bold tracking-wide">
+                {centerType === 'instructor' ? 'إدارة الشعار ومعلومات التواصل للبراند الشخصي' : 'إدارة الشعار ومعلومات التواصل الأساسية'}
+              </p>
             </div>
           </div>
 
@@ -696,7 +984,7 @@ export default function SettingsPage() {
             {/* Logo Upload */}
             <div className="p-6 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200 hover:border-blue-400 transition-all group">
               <label className="block text-xs md:text-sm font-black mb-4 flex items-center gap-2 text-slate-700">
-                <FaImage className="text-blue-500" /> شعار السنتر (Logo)
+                <FaImage className="text-blue-500" /> {centerType === 'instructor' ? 'شعار المنصة (Logo)' : 'شعار السنتر (Logo)'}
               </label>
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                 <div className="w-24 h-24 md:w-32 md:h-32 bg-white border border-slate-200 rounded-[2rem] flex items-center justify-center overflow-hidden relative shadow-inner p-4 grayscale hover:grayscale-0 transition-all duration-500">
@@ -725,7 +1013,9 @@ export default function SettingsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
               <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">اسم السنتر</label>
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">
+                  {centerType === 'instructor' ? 'اسم المنصة / الأكاديمية' : 'اسم السنتر'}
+                </label>
                 <div className="relative group">
                   <FaBuilding className="absolute top-4 right-4 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
                   <input
@@ -733,13 +1023,15 @@ export default function SettingsPage() {
                     value={settings.center_name}
                     onChange={(e) => setSettings({ ...settings, center_name: e.target.value })}
                     className="w-full p-4 pr-12 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all font-black text-gray-900 text-sm appearance-none opacity-100 placeholder:text-gray-400"
-                    placeholder="مثلاً: سنتر السراج"
+                    placeholder={centerType === 'instructor' ? 'مثلاً: أكاديمية النخبة' : 'مثلاً: سنتر السراج'}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">رقم تواصل السنتر</label>
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">
+                  {centerType === 'instructor' ? 'رقم الدعم / التواصل' : 'رقم تواصل السنتر'}
+                </label>
                 <div className="relative group">
                    <FaPhoneAlt className="absolute top-4 right-4 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
                   <input
@@ -782,7 +1074,9 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">عنوان السنتر بالتفصيل</label>
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">
+                  {centerType === 'instructor' ? 'عنوان المقر / المكتب (اختياري)' : 'عنوان السنتر بالتفصيل'}
+                </label>
                 <div className="relative group">
                   <FaMapMarkerAlt className="absolute top-4 right-4 text-slate-300 group-focus-within:text-red-500 transition-colors" />
                   <input
@@ -790,7 +1084,7 @@ export default function SettingsPage() {
                     value={settings.address}
                     onChange={(e) => setSettings({ ...settings, address: e.target.value })}
                     className="w-full p-4 pr-12 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-red-50 focus:border-red-500 outline-none transition-all font-black text-gray-900 text-sm appearance-none opacity-100 placeholder:text-gray-400"
-                    placeholder="المحافظة - المدينة - الشارع..."
+                    placeholder={centerType === 'instructor' ? 'مثلاً: القاهرة - أونلاين' : 'المحافظة - المدينة - الشارع...'}
                   />
                 </div>
               </div>
@@ -969,19 +1263,55 @@ export default function SettingsPage() {
           </div>
 
           <div className="p-6 md:p-8 space-y-6 flex-1">
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mr-1">لون النظام المفضل</label>
-              <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-3xl border border-slate-100">
-                <input
-                  type="color"
-                  value={settings.primary_color}
-                  onChange={(e) => setSettings({ ...settings, primary_color: e.target.value })}
-                  className="w-14 h-14 rounded-2xl cursor-pointer border-none bg-transparent"
-                />
-                <div className="flex-1 text-center font-mono font-black text-slate-700 bg-white py-3 rounded-2xl shadow-sm border border-slate-100">
-                  {settings.primary_color}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mr-1">اللون الرئيسي (للأزرار والعناوين)</label>
+                <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                  <input
+                    type="color"
+                    value={settings.primary_color}
+                    onChange={(e) => setSettings({ ...settings, primary_color: e.target.value })}
+                    className="w-10 h-10 rounded-xl cursor-pointer border-none bg-transparent"
+                  />
+                  <div className="flex-1 text-center font-mono font-black text-[10px] text-slate-700 bg-white py-2 rounded-xl border border-slate-100">
+                    {settings.primary_color}
+                  </div>
                 </div>
               </div>
+
+              {centerType === 'instructor' && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mr-1">اللون الثانوي (للخلفيات الداكنة)</label>
+                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                      <input
+                        type="color"
+                        value={settings.secondary_color}
+                        onChange={(e) => setSettings({ ...settings, secondary_color: e.target.value })}
+                        className="w-10 h-10 rounded-xl cursor-pointer border-none bg-transparent"
+                      />
+                      <div className="flex-1 text-center font-mono font-black text-[10px] text-slate-700 bg-white py-2 rounded-xl border border-slate-100">
+                        {settings.secondary_color}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mr-1">لون خلفية الهيرو (Hero Background)</label>
+                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                      <input
+                        type="color"
+                        value={settings.hero_bg_color}
+                        onChange={(e) => setSettings({ ...settings, hero_bg_color: e.target.value })}
+                        className="w-10 h-10 rounded-xl cursor-pointer border-none bg-transparent"
+                      />
+                      <div className="flex-1 text-center font-mono font-black text-[10px] text-slate-700 bg-white py-2 rounded-xl border border-slate-100">
+                        {settings.hero_bg_color}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -995,6 +1325,87 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+        
+        {/* 💳 PAYMENT INTEGRATION CARD */}
+        <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+          <div className="bg-gradient-to-l from-blue-50/50 to-white px-6 md:px-8 py-5 md:py-6 border-b border-slate-50 flex items-center gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-700 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-100">
+              <FaMoneyBillWave className="text-white text-lg md:text-xl" />
+            </div>
+            <div>
+              <h2 className="font-black text-slate-800 text-base md:text-lg">بوابة الدفع الإلكتروني</h2>
+              <p className="text-[10px] md:text-[11px] text-slate-400 font-bold tracking-wide">الربط مع Fawry / Paymob</p>
+            </div>
+          </div>
+
+          <div className="p-6 md:p-8 space-y-6 flex-1">
+            <div className="bg-blue-50/30 p-5 rounded-3xl border border-blue-100 space-y-4">
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest block mr-1">Paymob API Key (Secret Key)</label>
+                 <input 
+                   type="password"
+                   value={settings.paymob_api_key}
+                   onChange={(e) => setSettings({ ...settings, paymob_api_key: e.target.value })}
+                   placeholder="Z3B..."
+                   className="w-full p-4 bg-white border border-blue-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 font-mono text-xs"
+                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest block mr-1">Integration ID (Fawry)</label>
+                    <input 
+                      type="text"
+                      value={settings.paymob_integration_id_fawry}
+                      onChange={(e) => setSettings({ ...settings, paymob_integration_id_fawry: e.target.value })}
+                      className="w-full p-4 bg-white border border-blue-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 text-center font-black"
+                      placeholder="123456"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest block mr-1">Integration ID (Cards)</label>
+                    <input 
+                      type="text"
+                      value={settings.paymob_integration_id_card}
+                      onChange={(e) => setSettings({ ...settings, paymob_integration_id_card: e.target.value })}
+                      className="w-full p-4 bg-white border border-blue-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 text-center font-black"
+                      placeholder="123456"
+                    />
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest block mr-1">Iframe ID (Optional)</label>
+                    <input 
+                      type="text"
+                      value={settings.paymob_iframe_id}
+                      onChange={(e) => setSettings({ ...settings, paymob_iframe_id: e.target.value })}
+                      className="w-full p-4 bg-white border border-blue-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 text-center font-black"
+                      placeholder="12345"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest block mr-1">HMAC Secret</label>
+                    <input 
+                      type="password"
+                      value={settings.paymob_hmac_secret}
+                      onChange={(e) => setSettings({ ...settings, paymob_hmac_secret: e.target.value })}
+                      className="w-full p-4 bg-white border border-blue-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-50 text-xs font-mono"
+                      placeholder="XXXXXX..."
+                    />
+                 </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                 <p className="text-[10px] text-amber-700 font-bold leading-relaxed flex items-center gap-2">
+                    <FaExclamationTriangle shrink={0} />
+                    يرجى التأكد من الحصول على البيانات من لوحة تحكم Paymob الخاصة بك. هذه البيانات حساسة، لا تقم بمشاركتها مع أحد.
+                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* 🔵 ROOMS CARD */}
         <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
@@ -1004,17 +1415,25 @@ export default function SettingsPage() {
                 <FaDoorOpen className="text-white text-lg md:text-xl" />
               </div>
               <div>
-                <h2 className="font-black text-slate-800 text-base md:text-lg">قاعات السنتر</h2>
-                <p className="text-[10px] md:text-[11px] text-slate-400 font-bold tracking-wide">إدارة مساحات التدريس</p>
+                <h2 className="font-black text-slate-800 text-base md:text-lg">
+                  {centerType === 'instructor' ? 'أماكن الحضور / القاعات' : 'قاعات السنتر'}
+                </h2>
+                <p className="text-[10px] md:text-[11px] text-slate-400 font-bold tracking-wide">
+                  {centerType === 'instructor' ? 'إدارة مقرات المحاضرات وأماكن التواجد' : 'إدارة مساحات التدريس'}
+                </p>
               </div>
             </div>
-            <span className="text-[10px] bg-cyan-100 text-cyan-700 px-3 py-1.5 rounded-xl font-black">{rooms.length} قاعة</span>
+            <span className="text-[10px] bg-cyan-100 text-cyan-700 px-3 py-1.5 rounded-xl font-black">
+              {rooms.length} {centerType === 'instructor' ? 'مكان / قاعة' : 'قاعة'}
+            </span>
           </div>
 
           <div className="p-6 md:p-8 space-y-6 flex-1">
             <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 space-y-4">
                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block mr-1">إضافة قاعة جديدة</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block mr-1">
+                    {centerType === 'instructor' ? 'إضافة مقر / قاعة جديدة' : 'إضافة قاعة جديدة'}
+                  </label>
                   <input
                     type="text"
                     value={newRoomName}
@@ -1066,7 +1485,9 @@ export default function SettingsPage() {
               {rooms.length === 0 && (
                 <div className="text-center py-10 opacity-30">
                   <FaDoorOpen className="text-slate-300 text-4xl mx-auto mb-3" />
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">لا توجد قاعات</p>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    {centerType === 'instructor' ? 'لا توجد أماكن مسجلة' : 'لا توجد قاعات'}
+                  </p>
                 </div>
               )}
             </div>

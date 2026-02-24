@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase-browser';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FaUserGraduate, FaLock, FaSignInAlt, FaExclamationCircle, FaRocket, FaStar, FaTrophy, FaMobileAlt } from 'react-icons/fa';
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function StudentLoginPage() {
   const [studentCode, setStudentCode] = useState('');
@@ -133,7 +134,12 @@ export default function StudentLoginPage() {
                 منصة الطالب
               </h1>
               <p className="text-yellow-200/90 font-bold text-lg mb-2">انطلق نحو التفوق!</p>
-              <p className="text-cyan-200/80 text-sm font-medium" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>تابع حصصك وحقق نجاحك</p>
+              <div className="flex flex-col gap-2">
+                <p className="text-cyan-200/80 text-sm font-medium" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>تابع حصصك وحقق نجاحك</p>
+                <Link href="/admin-login" className="mt-2 text-[10px] font-black text-white/40 hover:text-yellow-400 transition-all uppercase tracking-widest border border-white/10 px-4 py-1.5 rounded-full inline-block mx-auto hover:bg-white/5">
+                   دخول لوحة الإدارة ⚙️
+                </Link>
+              </div>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
@@ -153,7 +159,7 @@ export default function StudentLoginPage() {
                   <input 
                     type="text" 
                     placeholder="مثال: S-100" 
-                    value={studentCode}
+                    value={studentCode || ''}
                     onChange={(e) => setStudentCode(e.target.value)}
                     className="relative w-full p-4 pr-12 bg-white/90 backdrop-blur border-2 border-yellow-400/50 focus:bg-white focus:border-yellow-400 focus:shadow-lg focus:shadow-yellow-200/50 rounded-2xl outline-none transition-all font-bold text-lg text-emerald-900 placeholder-emerald-400 shadow-inner"
                     required
@@ -161,7 +167,7 @@ export default function StudentLoginPage() {
                   <FaUserGraduate className="absolute top-4 right-4 text-emerald-400" />
                 </div>
               </div>
-
+ 
               <div>
                 <label className="block text-sm font-black text-yellow-400 mb-3 mr-2 flex items-center gap-2">
                   <span className="text-lg">🔐</span> كلمة السر
@@ -171,7 +177,7 @@ export default function StudentLoginPage() {
                   <input 
                     type="password" 
                     placeholder="••••••••" 
-                    value={password}
+                    value={password || ''}
                     onChange={(e) => setPassword(e.target.value)}
                     className="relative w-full p-4 pr-12 bg-white/90 backdrop-blur border-2 border-yellow-400/50 focus:bg-white focus:border-yellow-400 focus:shadow-lg focus:shadow-yellow-200/50 rounded-2xl outline-none transition-all font-bold text-lg text-emerald-900 placeholder-emerald-400 shadow-inner"
                     required
