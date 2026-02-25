@@ -49,7 +49,11 @@ export default function CoursesPage() {
     center_tax: '',
     monthly_price: '',
     is_sequential: false, // ⛓️ إلزام بالتسلسل
-    thumbnail_url: '' // 🖼️
+    thumbnail_url: '', // 🖼️
+    description: '', // 📝 وصف مختصر
+    digital_price: '', // سعر الحصة أونلاين
+    digital_full_price: '', // سعر الكورس كامل أونلاين
+    original_price: '' // السعر قبل الخصم (للعرض فقط)
   });
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
@@ -148,6 +152,10 @@ const fetchStages = async () => {
         monthly_price: parseFloat(formData.monthly_price) || 0,
         is_sequential: formData.is_sequential ?? false, // ⛓️
         thumbnail_url: formData.thumbnail_url || '', // 🖼️
+        description: formData.description || '', // 📝
+        digital_price: parseFloat(formData.digital_price) || 0,
+        digital_full_price: parseFloat(formData.digital_full_price) || 0,
+        original_price: parseFloat(formData.original_price) || 0,
         center_id: centerId
       };
 
@@ -233,7 +241,11 @@ const fetchStages = async () => {
       center_tax: course.center_tax || '',
       monthly_price: course.monthly_price || '',
       is_sequential: course.is_sequential ?? false, // ⛓️
-      thumbnail_url: course.thumbnail_url || '' // 🖼️
+      thumbnail_url: course.thumbnail_url || '', // 🖼️
+      description: course.description || '', // 📝
+      digital_price: course.digital_price || '',
+      digital_full_price: course.digital_full_price || '',
+      original_price: course.original_price || ''
     });
     setEditId(course.id);
     setIsEditing(true);
@@ -241,7 +253,11 @@ const fetchStages = async () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', instructor_id: '', grade: '', price: '', center_tax: '', monthly_price: '', is_sequential: false, thumbnail_url: '' });
+    setFormData({ 
+      name: '', instructor_id: '', grade: '', price: '', center_tax: '', 
+      monthly_price: '', is_sequential: false, thumbnail_url: '', 
+      description: '', digital_price: '', digital_full_price: '', original_price: '' 
+    });
     setIsEditing(false);
     setEditId(null);
   };
@@ -434,6 +450,47 @@ const fetchStages = async () => {
                 </div>
             </div>
 
+            {/* سعر الكورس أونلاين 🆕 */}
+            <div className="col-span-1">
+                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-1 md:mb-2 text-emerald-600">سعر البيع أونلاين (كاش)</label>
+                <div className="relative">
+                    <FaMoneyBillWave className="absolute top-3 sm:top-3.5 left-3 text-emerald-400 text-sm" />
+                    <input 
+                        type="number" placeholder="مثال: 600" 
+                        value={formData.digital_full_price} onChange={e => setFormData({...formData, digital_full_price: e.target.value})}
+                        className="w-full p-2.5 sm:p-3 pl-10 border border-emerald-200 bg-emerald-50 rounded-lg outline-none focus:border-blue-500 transition text-sm min-h-[44px]" 
+                         min="0" 
+                    />
+                </div>
+            </div>
+
+            {/* السعر قبل الخصم 🆕 */}
+            <div className="col-span-1">
+                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-1 md:mb-2 text-red-600">السعر قبل الخصم (اختياري)</label>
+                <div className="relative">
+                    <FaMoneyBillWave className="absolute top-3 sm:top-3.5 left-3 text-red-400 text-sm" />
+                    <input 
+                        type="number" placeholder="مثال: 800" 
+                        value={formData.original_price} onChange={e => setFormData({...formData, original_price: e.target.value})}
+                        className="w-full p-2.5 sm:p-3 pl-10 border border-red-200 bg-red-50 rounded-lg outline-none focus:border-red-500 transition text-sm min-h-[44px]" 
+                         min="0" 
+                    />
+                </div>
+            </div>
+
+            {/* وصف مختصر للكورس 🆕 (يظهر فقط في وضع المدرس) */}
+            {centerType === 'instructor' && (
+              <div className="col-span-1 sm:col-span-2 lg:col-span-5 mt-2">
+                  <label className="block text-xs sm:text-sm font-black text-indigo-600 mb-2 uppercase tracking-widest">وصف مختصر للكورس (يظهر للطلاب)</label>
+                  <textarea 
+                      placeholder="اكتب وصفاً جذاباً للكورس (مثال: شرح كامل للمنهج مع حل ٥٠٠ سؤال متوقع)" 
+                      value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
+                      className="w-full p-4 border-2 border-indigo-100 bg-indigo-50/20 rounded-2xl outline-none focus:border-indigo-500 transition text-sm min-h-[100px] resize-none font-bold" 
+                      rows="3"
+                  />
+              </div>
+            )}
+
             {/* 🖼️ صورة الكورس (Thumbnail) - تظهر فقط في وضع المدرس */}
             {centerType === 'instructor' && (
               <div className="col-span-1 sm:col-span-2 lg:col-span-5 border-t border-slate-100 pt-5 mt-2">
@@ -526,9 +583,9 @@ const fetchStages = async () => {
                 <div key={course.id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition duration-300 group overflow-hidden">
                     {/* Course Image - تظهر فقط في وضع المدرس */}
                     {centerType === 'instructor' && (
-                        <div className="h-40 bg-slate-100 relative overflow-hidden">
+                        <div className="h-48 bg-slate-100 relative overflow-hidden">
                            {course.thumbnail_url ? (
-                              <img src={course.thumbnail_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt="" />
+                              <img src={course.thumbnail_url} className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-1000" alt="" />
                            ) : (
                               <div className="w-full h-full flex items-center justify-center text-slate-300">
                                  <FaImage size={40} />
@@ -553,6 +610,9 @@ const fetchStages = async () => {
                             <h3 className="font-bold text-base sm:text-lg md:text-xl text-gray-800 group-hover:text-blue-600 transition">
                                 {course.name}
                             </h3>
+                            {centerType === 'instructor' && course.description && (
+                                <p className="text-[10px] text-gray-500 mt-1 line-clamp-1 italic">{course.description}</p>
+                            )}
                         </div>
                         <div className="text-left">
                             <span className="block text-green-600 font-bold text-base sm:text-lg">{course.price} ج.م</span>

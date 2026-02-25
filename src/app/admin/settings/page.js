@@ -8,7 +8,7 @@ import {
   FaWhatsapp, FaExclamationTriangle, FaPhoneAlt, FaCode, FaTrash,
   FaDoorOpen, FaMapMarkerAlt, FaLayerGroup, FaSortNumericDown, FaCrown,
   FaCalendarAlt, FaMoneyBillWave, FaPaintBrush, FaFileAlt, FaCommentDots,
-  FaUserGraduate, FaPlus, FaTimes,FaLock
+  FaUserGraduate, FaPlus, FaTimes,FaLock,FaHeadset
 } from 'react-icons/fa';
 
 import AccessDenied from '../../../components/AccessDenied';
@@ -41,7 +41,9 @@ export default function SettingsPage() {
     paymob_integration_id_fawry: '',
     paymob_integration_id_card: '',
     paymob_iframe_id: '',
-    paymob_hmac_secret: ''
+    paymob_hmac_secret: '',
+    support_phone: '',
+    whatsapp_number: ''
   });
 
   // 🎭 Identity Mode State
@@ -134,7 +136,9 @@ export default function SettingsPage() {
             paymob_integration_id_fawry: settingsData.paymob_integration_id_fawry || '',
             paymob_integration_id_card: settingsData.paymob_integration_id_card || '',
             paymob_iframe_id: settingsData.paymob_iframe_id || '',
-            paymob_hmac_secret: settingsData.paymob_hmac_secret || ''
+            paymob_hmac_secret: settingsData.paymob_hmac_secret || '',
+            support_phone: settingsData.support_phone || '',
+            whatsapp_number: settingsData.whatsapp_number || ''
           });
           // 🎭 Identity Mode
           setInstructorFields({
@@ -232,6 +236,8 @@ export default function SettingsPage() {
         paymob_integration_id_card: settings.paymob_integration_id_card,
         paymob_iframe_id: settings.paymob_iframe_id,
         paymob_hmac_secret: settings.paymob_hmac_secret,
+        support_phone: settings.support_phone,
+        whatsapp_number: settings.whatsapp_number,
       }, { onConflict: 'center_id' });
 
 
@@ -1030,7 +1036,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">
-                  {centerType === 'instructor' ? 'رقم الدعم / التواصل' : 'رقم تواصل السنتر'}
+                  {centerType === 'instructor' ? 'رقم التواصل الأساسي' : 'رقم تواصل السنتر (عام)'}
                 </label>
                 <div className="relative group">
                    <FaPhoneAlt className="absolute top-4 right-4 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
@@ -1039,6 +1045,38 @@ export default function SettingsPage() {
                     value={settings.center_phone}
                     onChange={(e) => setSettings({ ...settings, center_phone: e.target.value })}
                     className="w-full p-4 pr-12 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all font-black text-gray-900 text-sm appearance-none opacity-100 placeholder:text-gray-400"
+                    placeholder="01xxxxxxxxx"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">
+                  رقم الدعم الفني
+                </label>
+                <div className="relative group">
+                   <FaHeadset className="absolute top-4 right-4 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                  <input
+                    type="tel"
+                    value={settings.support_phone}
+                    onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
+                    className="w-full p-4 pr-12 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all font-black text-gray-900 text-sm appearance-none opacity-100 placeholder:text-gray-400"
+                    placeholder="01xxxxxxxxx"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mr-1">
+                  رقم الواتساب
+                </label>
+                <div className="relative group">
+                   <FaWhatsapp className="absolute top-4 right-4 text-slate-300 group-focus-within:text-emerald-600 transition-colors" />
+                  <input
+                    type="tel"
+                    value={settings.whatsapp_number}
+                    onChange={(e) => setSettings({ ...settings, whatsapp_number: e.target.value })}
+                    className="w-full p-4 pr-12 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 outline-none transition-all font-black text-gray-900 text-sm appearance-none opacity-100 placeholder:text-gray-400"
                     placeholder="01xxxxxxxxx"
                   />
                 </div>

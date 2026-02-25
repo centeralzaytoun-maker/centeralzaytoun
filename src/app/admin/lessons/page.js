@@ -7,7 +7,7 @@ import {
   FaArrowLeft, FaCheckCircle, FaGlobe, FaLock, FaSortAmountDown,
   FaEye, FaSearch, FaChevronDown, FaYoutube, FaVimeoV, FaCloud, 
   FaFilter, FaClock, FaQrcode, FaQuestionCircle, FaChartLine, FaMagic,
-  FaCalendarAlt, FaChevronRight, FaFolderPlus, FaListUl, FaPlay, FaGraduationCap, FaBolt, FaCheck
+  FaCalendarAlt, FaChevronRight, FaFolderPlus, FaListUl, FaPlay, FaGraduationCap, FaBolt, FaCheck,FaMoneyBillWave
 } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
@@ -87,7 +87,7 @@ export default function LessonsPage() {
     try {
       const [stagesRes, coursesRes, examsRes] = await Promise.all([
         supabaseBrowser.from('educational_stages').select('*').eq('center_id', centerId).order('sort_order'),
-        supabaseBrowser.from('courses').select('id, name, grade, instructors(name)').eq('center_id', centerId).order('name'),
+        supabaseBrowser.from('courses').select('id, name, grade, instructors(name), digital_price, digital_full_price, original_price').eq('center_id', centerId).order('name'),
         supabaseBrowser.from('exams').select('id, title').eq('center_id', centerId).order('created_at', { ascending: false })
       ]);
       setStages(stagesRes.data || []);
@@ -134,40 +134,96 @@ export default function LessonsPage() {
     };
 
     try {
-      let err;
+      let error;
       if (lessonData.id) {
-        const { error } = await supabaseBrowser.from('lessons').update(payload).eq('id', lessonData.id);
-        err = error;
+        const { error: updateError } = await supabaseBrowser.from('lessons').update(payload).eq('id', lessonData.id);
+        error = updateError;
       } else {
         const { id, ...newObj } = payload;
-        const { error } = await supabaseBrowser.from('lessons').insert([newObj]);
-        err = error;
+        const { error: insertError } = await supabaseBrowser.from('lessons').insert([newObj]);
+        error = insertError;
       }
-      if (!err) {
+      if (!error) {
         toast.success(lessonData.id ? 'تم تحديث الدرس بنجاح ✨' : 'تم نشر الدرس الجديد بنجاح 🔥');
         setIsLessonFormOpen(false);
         fetchLessons(selectedCourseId);
-      } else throw err;
+      } else throw error;
     } catch (err) { 
       toast.error('فشل حفظ الدرس. تأكد من إكمال جميع البيانات'); 
       console.error('Save Error:', err); 
     } finally { setIsSaving(false); }
   };
 
+  const updateCourseDigitalPricing = async () => {
+    if (!selectedCourseId) return;
+    const course = courses.find(c => c.id === selectedCourseId);
+    setIsSaving(true);
+    try {
+      const { error } = await supabaseBrowser
+        .from('courses')
+        .update({
+          digital_price: parseFloat(course.digital_price) || 0,
+          digital_full_price: parseFloat(course.digital_full_price) || 0,
+          original_price: parseFloat(course.original_price) || 0
+        })
+        .eq('id', selectedCourseId);
+      
+      if (error) throw error;
+      toast.success('تم تحديث أسعار المحتوى الرقمي للمادة');
+    } catch (err) {
+      toast.error('خطأ في حفظ الأسعار');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveChapter = async (e) => {
     e.preventDefault();
-    const payload = { ...chapterData, course_id: selectedCourseId, center_id: centerId };
+    const payload = { 
+      ...chapterData, 
+      course_id: selectedCourseId, 
+      center_id: centerId,
+      exam_id: chapterData.exam_id === '' ? null : chapterData.exam_id
+    };
+
     try {
+      let error;
       if (chapterData.id) {
-        await supabaseBrowser.from('lesson_chapters').update(payload).eq('id', chapterData.id);
+        const { error: updateError } = await supabaseBrowser.from('lesson_chapters').update(payload).eq('id', chapterData.id);
+        error = updateError;
       } else {
         const { id, ...newObj } = payload;
-        await supabaseBrowser.from('lesson_chapters').insert([newObj]);
+        const { error: insertError } = await supabaseBrowser.from('lesson_chapters').insert([newObj]);
+        error = insertError;
       }
+
+      if (error) throw error;
+
       toast.success('تم حفظ الباب/الفصل بنجاح');
       setIsChapterFormOpen(false);
       fetchChapters(selectedCourseId);
-    } catch (err) { toast.error('خطأ في حفظ الفصل'); }
+    } catch (err) { 
+      toast.error('خطأ في حفظ الفصل: تأكد من تحديث قاعدة البيانات');
+      console.error('Chapter Save Error Details:', {
+        message: err.message,
+        details: err.details,
+        hint: err.hint,
+        code: err.code
+      }); 
+    }
+  };
+
+  const handleDeleteChapter = async (id) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الباب؟ (الحصص الموجودة داخله لن تُحذف ولكن ستصبح تابعة لقسم عام)')) return;
+    try {
+      const { error } = await supabaseBrowser.from('lesson_chapters').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('تم حذف الباب بنجاح');
+      setSelectedChapterId('all');
+      fetchChapters(selectedCourseId);
+    } catch (err) {
+      toast.error('حدث خطأ أثناء الحذف');
+    }
   };
 
   const handleAddCheckpoint = () => {
@@ -222,11 +278,14 @@ export default function LessonsPage() {
           <div className="flex flex-wrap gap-4 w-full lg:w-auto">
              <motion.button 
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              onClick={() => setIsChapterFormOpen(true)}
+              onClick={() => {
+                setChapterData({ id: null, title: '', order_index: chapters.length, price: 0, exam_id: '' });
+                setIsChapterFormOpen(true);
+              }}
               disabled={!selectedCourseId}
               className="h-16 px-8 bg-white/5 border border-white/10 hover:border-indigo-500/50 rounded-2xl font-black text-sm flex items-center gap-3 transition-all disabled:opacity-20 shadow-xl"
              >
-                <FaFolderPlus className="text-indigo-400 text-lg" /> تنظيم الأبواب
+                <FaFolderPlus className="text-indigo-400 text-lg" /> إضافة باب
              </motion.button>
              <motion.button 
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
@@ -241,25 +300,116 @@ export default function LessonsPage() {
 
         {/* 💼 NEW: Business Overview (Pricing Strategy) */}
         {selectedCourseId && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-             {[
-               { title: 'سعر الكورس بالكامل', icon: <FaGraduationCap />, price: courses.find(c => c.id === selectedCourseId)?.price || 0, color: 'blue' },
-               { title: 'متوسط سعر الأبواب', icon: <FaLayerGroup />, price: chapters.length > 0 ? (chapters.reduce((acc, c) => acc + (c.price || 0), 0) / chapters.length).toFixed(2) : 0, color: 'indigo' },
-               { title: 'متوسط سعر الحصص', icon: <FaVideo />, price: lessons.length > 0 ? (lessons.reduce((acc, l) => acc + (l.price || 0), 0) / lessons.length).toFixed(2) : 0, color: 'emerald' },
-               { title: 'إجمالي المنهج (مجمع)', icon: <FaMagic />, price: (chapters.reduce((acc, c) => acc + (c.price || 0), 0) + lessons.filter(l => !l.chapter_id).reduce((acc, l) => acc + (l.price || 0), 0)).toFixed(2), color: 'amber' }
-             ].map((stat, i) => (
-               <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-xl relative overflow-hidden group">
-                  <div className={`absolute top-0 left-0 w-1 h-full bg-${stat.color}-500 shadow-[0_0_15px_${stat.color}]`}></div>
+          <div className="flex flex-col gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {/* 1. Editable Full Course Price */}
+                <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-xl relative overflow-hidden group shadow-2xl">
+                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_15px_blue]"></div>
+                   <div className="flex items-center gap-4 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400"><FaGraduationCap /></div>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">سعر الكورس كاملاً (ديجيتال)</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                      <input 
+                         type="number"
+                         value={courses.find(c => c.id === selectedCourseId)?.digital_full_price || 0}
+                         onChange={(e) => {
+                            const val = e.target.value;
+                            setCourses(courses.map(c => c.id === selectedCourseId ? {...c, digital_full_price: val} : c));
+                         }}
+                         className="bg-transparent text-3xl font-black text-white w-24 outline-none focus:text-blue-400 border-b-2 border-transparent focus:border-blue-500 transition-all"
+                      />
+                      <span className="text-[10px] font-black text-slate-500 uppercase">EGP</span>
+                   </div>
+                </div>
+
+                {/* 1.5. Editable Original Price */}
+                <div className="bg-white/5 border border-red-500/20 p-6 rounded-[2rem] backdrop-blur-xl relative overflow-hidden group shadow-2xl">
+                   <div className="absolute top-0 left-0 w-1 h-full bg-red-500 shadow-[0_0_15px_red]"></div>
+                   <div className="flex items-center gap-4 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400"><FaMoneyBillWave /></div>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">السعر قبل الخصم (للطلاب)</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                      <input 
+                         type="number"
+                         value={courses.find(c => c.id === selectedCourseId)?.original_price || 0}
+                         onChange={(e) => {
+                            const val = e.target.value;
+                            setCourses(courses.map(c => c.id === selectedCourseId ? {...c, original_price: val} : c));
+                         }}
+                         className="bg-transparent text-3xl font-black text-white w-24 outline-none focus:text-red-400 border-b-2 border-transparent focus:border-red-500 transition-all"
+                      />
+                      <span className="text-[10px] font-black text-slate-500 uppercase">EGP</span>
+                   </div>
+                </div>
+
+               {/* 2. Editable Default Lesson Price */}
+               <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-xl relative overflow-hidden group shadow-2xl">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 shadow-[0_0_15px_indigo]"></div>
                   <div className="flex items-center gap-4 mb-4">
-                     <div className={`w-10 h-10 rounded-xl bg-${stat.color}-500/10 flex items-center justify-center text-${stat.color}-400`}>{stat.icon}</div>
-                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.title}</span>
+                     <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400"><FaVideo /></div>
+                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">سعر الحصة الموحد (ديجيتال)</span>
                   </div>
-                  <div className="flex items-baseline gap-2">
-                     <span className="text-2xl font-black text-white">{stat.price}</span>
+                  <div className="flex items-center gap-2">
+                     <input 
+                        type="number"
+                        value={courses.find(c => c.id === selectedCourseId)?.digital_price || 0}
+                        onChange={(e) => {
+                           const val = e.target.value;
+                           setCourses(courses.map(c => c.id === selectedCourseId ? {...c, digital_price: val} : c));
+                        }}
+                        className="bg-transparent text-3xl font-black text-white w-24 outline-none focus:text-indigo-400 border-b-2 border-transparent focus:border-indigo-500 transition-all"
+                     />
                      <span className="text-[10px] font-black text-slate-500 uppercase">EGP</span>
                   </div>
                </div>
-             ))}
+
+               {/* 3. Static Stats */}
+               <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-xl relative overflow-hidden group">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_15px_emerald]"></div>
+                  <div className="flex items-center gap-4 mb-4">
+                     <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400"><FaLayerGroup /></div>
+                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">متوسط سعر الأبواب</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                     <span className="text-2xl font-black text-white">{chapters.length > 0 ? (chapters.reduce((acc, c) => acc + (c.price || 0), 0) / chapters.length).toFixed(2) : 0}</span>
+                     <span className="text-[10px] font-black text-slate-500 uppercase">EGP</span>
+                  </div>
+               </div>
+
+                <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-xl relative overflow-hidden group">
+                   <div className="absolute top-0 left-0 w-1 h-full bg-amber-500 shadow-[0_0_15px_amber]"></div>
+                   <div className="flex items-center gap-4 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400"><FaMagic /></div>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">إجمالي المنهج (مجمع)</span>
+                   </div>
+                   <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-white">
+                        {(
+                          chapters.reduce((acc, c) => acc + (parseFloat(c.price) || 0), 0) + 
+                          lessons.filter(l => !l.chapter_id).reduce((acc, l) => {
+                            const unified = parseFloat(courses.find(c => c.id === selectedCourseId)?.digital_price) || 0;
+                            return acc + (parseFloat(l.price) > 0 ? parseFloat(l.price) : unified);
+                          }, 0)
+                        ).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase">EGP</span>
+                   </div>
+                </div>
+            </div>
+
+            {/* 💾 Save Toolbar */}
+            <div className="flex justify-end">
+               <button 
+                  onClick={updateCourseDigitalPricing}
+                  disabled={isSaving}
+                  className="h-14 px-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-2xl transition-all active:scale-95 flex items-center gap-3"
+               >
+                  {isSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <FaSave />} 
+                  تبني وحفظ الأسعار الجديدة
+               </button>
+            </div>
           </div>
         )}
 
@@ -349,9 +499,28 @@ export default function LessonsPage() {
                     <button 
                       key={ch.id}
                       onClick={() => setSelectedChapterId(ch.id)}
-                      className={`px-8 py-4 rounded-[1.5rem] font-black text-xs transition-all whitespace-nowrap shadow-xl border ${selectedChapterId === ch.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-indigo-900/30' : 'bg-white/5 text-slate-500 border-white/5 hover:border-white/20'}`}
+                      className={`px-8 py-4 rounded-[1.5rem] font-black text-xs transition-all whitespace-nowrap shadow-xl border flex items-center gap-3 ${selectedChapterId === ch.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-indigo-900/30' : 'bg-white/5 text-slate-500 border-white/5 hover:border-white/20'}`}
                     >
                       {ch.title}
+                      {selectedChapterId === ch.id && (
+                        <div className="flex items-center gap-2">
+                          <FaEdit 
+                            className="text-[10px] hover:text-white transition-colors" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChapterData(ch);
+                              setIsChapterFormOpen(true);
+                            }}
+                          />
+                          <FaTrash 
+                            className="text-[10px] hover:text-red-400 transition-colors" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteChapter(ch.id);
+                            }}
+                          />
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>

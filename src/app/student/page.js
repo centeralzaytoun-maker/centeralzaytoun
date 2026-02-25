@@ -177,7 +177,7 @@ export default function StudentLandingPage() {
              </Link>
 
             <div className="hidden md:flex items-center gap-8 font-black text-xs text-slate-500 uppercase tracking-widest">
-                <a href="#courses" className="hover:text-black transition-colors">الكورسات</a>
+                <Link href="/student/courses" className="hover:text-black transition-colors">الكورسات</Link>
                 <a href="#features" className="hover:text-black transition-colors">ليه احنا؟</a>
                 <a href="#about" className="hover:text-black transition-colors">عن المعلم</a>
             </div>
@@ -378,58 +378,6 @@ export default function StudentLandingPage() {
         </div>
       </section>
 
-      {/* 📚 COURSES FEED (Featured) */}
-      <section id="courses" className="py-32 bg-slate-50 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
-           <div className="text-center mb-20">
-              <h2 className="text-4xl md:text-6xl font-black text-slate-900 mb-6">المسارات التعليمية</h2>
-              <p className="text-slate-400 font-bold max-w-xl mx-auto leading-relaxed">اختار مسارك دلوقتي وابدأ في مذاكرة أهم الحصص اللي هتفرق معاك في تقفيل المادة.</p>
-           </div>
-
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-              {courses.map((course, i) => (
-                <motion.div 
-                  key={course.id} 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  whileHover={{ y: -10 }}
-                  className="bg-white rounded-[3.5rem] border border-white p-4 shadow-sm hover:shadow-3xl hover:shadow-slate-200/40 transition-all group overflow-hidden"
-                >
-                   <div className="h-[300px] bg-slate-100 rounded-[3rem] overflow-hidden relative">
-                      {course.thumbnail_url ? (
-                        <img src={course.thumbnail_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt="" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center p-12 text-center text-white font-black text-2xl leading-tight" style={{ backgroundColor: primaryColor }}>
-                            {course.name}
-                        </div>
-                      )}
-                      <div className="absolute top-6 right-6 bg-white/90 backdrop-blur-md px-6 py-2 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl" style={{ color: primaryColor }}>
-                         {course.grade}
-                      </div>
-                   </div>
-                   <div className="p-8">
-                      <h3 className="text-2xl font-black text-slate-900 mb-6 h-16 line-clamp-2 leading-tight">{course.name}</h3>
-                      <div className="flex items-center justify-between mb-8 border-t border-slate-50 pt-6">
-                         <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400"><FaUserGraduate size={16} /></div>
-                           <span className="font-black text-xs text-slate-500">{course.instructors?.name || settings?.instructor_name}</span>
-                         </div>
-                         <FaStar className="text-amber-400" />
-                      </div>
-                      <Link 
-                        href={`/student/courses/${course.id}`} 
-                        className="w-full text-white py-5 rounded-[2rem] font-black text-center text-sm inline-block shadow-xl shadow-slate-200 hover:opacity-90 transition-all duration-500"
-                        style={{ backgroundColor: primaryColor }}
-                      >
-                         اشترك دلوقتي
-                      </Link>
-                   </div>
-                </motion.div>
-              ))}
-           </div>
-        </div>
-      </section>
-
       {/* 👨‍🏫 TEACHER STORY (Elite About) */}
       <section id="about" className="py-40 bg-white">
           <div className="max-w-7xl mx-auto px-6">
@@ -513,77 +461,48 @@ export default function StudentLandingPage() {
         </div>
       </section>
 
-      {/* 📞 ELITE FOOTER */}
-      <footer style={{ backgroundColor: secondaryColor }} className="pt-32 pb-12 text-white">
+      {/* 📞 ELITE FOOTER - Simplified */}
+      <footer style={{ backgroundColor: secondaryColor }} className="pt-20 pb-10 text-white">
          <div className="max-w-7xl mx-auto px-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-20 border-b border-white/5 pb-24">
+            <div className="flex flex-col md:flex-row justify-between items-start gap-12 border-b border-white/5 pb-10">
                
                {/* Branding */}
-               <div className="md:col-span-1">
-                  <h2 className="text-3xl font-black mb-6 text-white tracking-tighter">
+               <div className="max-w-md text-right">
+                  <h2 className="text-3xl font-black mb-4 text-white tracking-tighter">
                     {settings?.instructor_name ? `أ/ ${settings.instructor_name}` : 'NEXUS'}<span style={{ color: primaryColor }}>.</span>
                   </h2>
-                  <p className="text-white/40 text-sm font-bold leading-relaxed mb-10 max-w-xs">
+                  <p className="text-white/40 text-sm font-bold leading-relaxed">
                      {settings?.instructor_name 
-                      ? `المنصة الرسمية لـ أ/ ${settings.instructor_name} لتقديم أفضل تجربة تعليمية لطلاب ${settings.instructor_subject || 'المواد الدراسية'} في مصر.`
-                      : 'تجربة تعليمية تتخطى الحدود، بنيت بأحدث تقنيات الـ LMS العالمية لتضمن أفضل تجربة للطالب والمعلم في مصر 2026.'}
+                      ? `المنصة الرسمية لـ أ/ ${settings.instructor_name} لتقديم أفضل تجربة تعليمية في مصر.`
+                      : 'تجربة تعليمية تتخطى الحدود بأحدث التقنيات.'}
                   </p>
-                  <div className="flex gap-4">
+               </div>
+
+               {/* Simple Contact & Social */}
+               <div className="flex flex-col items-start md:items-end gap-6 w-full md:w-auto">
+                  <div className="flex items-center gap-4">
                      {(settings?.social_links || [
                        { platform: 'youtube', url: '#' },
                        { platform: 'facebook', url: '#' },
                        { platform: 'whatsapp', url: '#' }
                      ]).map((social, i) => (
-                        <a key={i} href={social.url} target="_blank" className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-white/50 transition-all hover:opacity-80" style={{ hoverColor: primaryColor }}>
+                        <a key={i} href={social.url} target="_blank" className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-white/50 transition-all hover:bg-white/10" style={{ hoverColor: primaryColor }}>
                            {getSocialIcon(social.platform)}
                         </a>
                      ))}
                   </div>
-               </div>
-
-               {/* Links 1 */}
-               <div>
-                  <h4 className="font-black text-xs uppercase tracking-[0.4em] mb-8 text-white/20">الأقسام الرئيسية</h4>
-                  <ul className="space-y-4 font-black text-xs text-white/50 uppercase tracking-widest">
-                     <li><a href="#courses" className="hover:opacity-80 transition-colors">قائمة الكورسات</a></li>
-                     <li><Link href="/login" className="hover:opacity-80 transition-colors">تسجيل دخول</Link></li>
-                     <li><Link href="/login" className="hover:opacity-80 transition-colors">إنشاء حساب جديد</Link></li>
-                     <li><a href="#about" className="hover:opacity-80 transition-colors">عن المعلم</a></li>
-                  </ul>
-               </div>
-
-               {/* Links 2 */}
-               <div>
-                  <h4 className="font-black text-xs uppercase tracking-[0.4em] mb-8 text-white/20">الدعم والمساعدة</h4>
-                  <ul className="space-y-4 font-black text-xs text-white/50 uppercase tracking-widest">
-                     <li><a href="#" className="hover:opacity-80 transition-colors">مركز المساعدة</a></li>
-                     <li><a href="#" className="hover:opacity-80 transition-colors">شروط الاستخدام</a></li>
-                     <li><a href="#" className="hover:opacity-80 transition-colors">سياسة الخصوصية</a></li>
-                     <li><a href="#" className="hover:opacity-80 transition-colors">تواصل معنا</a></li>
-                  </ul>
-               </div>
-
-               {/* Contact */}
-               <div>
-                  <h4 className="font-black text-xs uppercase tracking-[0.4em] mb-8 text-white/20">اتصل بنا</h4>
-                  <p className="text-white/40 font-bold text-[10px] uppercase mb-2">Technical Support Line</p>
-                  <p className="text-2xl font-black text-white hover:opacity-80 transition-colors" dir="ltr">+20 123 456 789</p>
-                  
-                  <div className="mt-10 p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: primaryColor }}><FaPhoneAlt size={14} /></div>
-                      <div>
-                         <p className="text-[10px] font-black uppercase text-white/30">Available 24/7</p>
-                         <p className="text-xs font-black text-white italic tracking-widest">NEXUS SUPPORT TEAM</p>
-                      </div>
+                  <div className="flex flex-col md:items-end gap-1">
+                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20">الدعم الفني</span>
+                     <span className="text-xl font-black tracking-tighter text-white" dir="ltr">{settings?.support_phone || '+20 123 456 789'}</span>
                   </div>
                </div>
             </div>
 
-            <div className="mt-12 flex flex-col md:flex-row justify-between items-center gap-6 opacity-30 text-[9px] font-black uppercase tracking-[0.5em]">
+            <div className="mt-8 flex flex-col md:flex-row justify-between items-center gap-4 opacity-30 text-[9px] font-black uppercase tracking-[0.4em]">
                <p>© {new Date().getFullYear()} Classora Smart Management System</p>
                <div className="flex gap-8">
-                  <span>Privacy Policy</span>
-                  <span>Terms of Service</span>
+                  <Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link>
+                  <Link href="#" className="hover:text-white transition-colors">Terms of Service</Link>
                </div>
             </div>
          </div>

@@ -69,12 +69,14 @@ export default function StudentCourseView() {
         supabase.from('lessons').select('*').eq('course_id', courseId).order('order_index')
       ]);
 
-      const now = new Date();
-      // Filter lessons by scheduling
+      // Filter and Apply fallback pricing
       const allLessons = (lessonsRes.data || []).filter(l => {
         if (!l.scheduled_at) return true;
         return new Date(l.scheduled_at) <= now;
-      });
+      }).map(l => ({
+        ...l,
+        price: l.price > 0 ? l.price : (crs?.digital_price || 0)
+      }));
 
       setChapters(chaptersRes.data || []);
       setLessons(allLessons);
@@ -408,7 +410,13 @@ export default function StudentCourseView() {
                         ) : !isLessonAccessible(selectedLesson, selectedIndex) ? (
                            <AccessGate type="sequential" lesson={lessons[selectedIndex - 1]} onGoPrev={() => { setSelectedLesson(lessons[selectedIndex - 1]); setSelectedIndex(selectedIndex - 1); }} />
                         ) : (
-                           <AccessGate type="enrol" onEnrol={() => router.push(`/student/checkout/${courseId}`)} />
+                           <AccessGate 
+                              type="enrol" 
+                              lesson={selectedLesson}
+                              course={course}
+                              chapter={chapters.find(c => c.id === selectedLesson.chapter_id)}
+                              onEnrol={(type, targetId) => router.push(`/student/checkout/${courseId}?type=${type}&target=${targetId}`)} 
+                           />
                         )
                      ) : (
                         <div className="aspect-video flex flex-col items-center justify-center text-slate-600 p-20 text-center">
@@ -569,15 +577,20 @@ function LessonItem({ lesson, idx, isActive, isDone, isLocked, onClick }) {
       
       <div className="flex-1 overflow-hidden">
          <p className={`font-black text-sm truncate mb-1 transition-colors ${isActive ? 'text-blue-400' : 'text-slate-200 group-hover:text-white'}`}>{lesson.title}</p>
-         <div className="flex items-center gap-2">
-            <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Digital Module</span>
-            {lesson.is_free && <span className="text-[8px] font-black bg-amber-500/20 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-lg uppercase">Prerelease</span>}
+         <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+               <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Digital Module</span>
+               {lesson.is_free && <span className="text-[8px] font-black bg-amber-500/20 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-lg uppercase">Prerelease</span>}
+            </div>
+            {isLocked && lesson.price > 0 && (
+              <span className="text-[9px] font-black text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-500/20">{lesson.price} ج.م</span>
+            )}
          </div>
       </div>
     </motion.button>;
 }
 
-function AccessGate({ type, lesson, onGoPrev, onEnrol }) {
+function AccessGate({ type, lesson, chapter, course, onGoPrev, onEnrol }) {
    if (type === 'sequential') return (
     <div className="aspect-video bg-[#020617] flex flex-col items-center justify-center text-white p-10 text-center relative overflow-hidden">
        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600/10 blur-[100px] pointer-events-none"></div>
@@ -591,14 +604,50 @@ function AccessGate({ type, lesson, onGoPrev, onEnrol }) {
    );
 
    return (
-    <div className="aspect-video bg-[#020617] flex flex-col items-center justify-center text-white p-10 text-center relative overflow-hidden">
+    <div className="aspect-video bg-[#020617] flex flex-col items-center justify-center text-white p-6 md:p-10 text-center relative overflow-hidden">
        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-red-600/10 blur-[100px] pointer-events-none"></div>
-       <div className="w-24 h-24 bg-red-600/10 rounded-[2rem] flex items-center justify-center text-red-500 mb-8 border border-red-500/20 shadow-2xl"><FaLock size={32} /></div>
-       <h2 className="text-3xl font-black mb-4 tracking-tight text-red-500">حصة مغلقة 🔒</h2>
-       <p className="text-slate-500 max-w-sm mx-auto mb-10 font-bold italic text-sm">هذا المحتوى محمي. يمكنك تفعيل الحصة بشكل منفرد، أو تفعيل الباب، أو الكورس بالكامل باستخدام كود التفعيل الخاص بك.</p>
-       <button onClick={onEnrol} className="bg-white text-black px-12 py-4 rounded-2xl font-black shadow-2xl hover:bg-slate-200 transition-all uppercase tracking-widest text-xs">
-          تفعيل المحتوى الآن (ادخل الكود)
-       </button>
+       
+       <div className="relative z-10 mb-6 md:mb-10">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-red-600/10 rounded-[2rem] flex items-center justify-center text-red-500 mx-auto mb-6 border border-red-500/20 shadow-2xl"><FaLock size={24} /></div>
+          <h2 className="text-2xl md:text-4xl font-black mb-4 tracking-tight">هذا المحتوى مغلق 🔒</h2>
+          <p className="text-slate-500 max-w-lg mx-auto font-bold text-xs md:text-sm leading-relaxed mb-8">اختر الطريقة المناسبة لك لتفعيل المحتوى والاستمتاع بمشاهدة الحصة</p>
+       </div>
+
+       <div className="relative z-10 flex flex-wrap justify-center gap-4 w-full max-w-3xl">
+          {/* Option 1: Unlock Lesson */}
+          {lesson?.price > 0 && (
+            <button onClick={() => onEnrol('lesson', lesson.id)} className="flex-1 min-w-[200px] p-6 bg-white/5 border border-white/10 rounded-[2rem] hover:bg-white/10 transition-all group group relative">
+               <div className="absolute -top-3 right-6 bg-emerald-500 text-white text-[9px] font-black px-3 py-1 rounded-full shadow-lg">أرخص خيار</div>
+               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">تفعيل الحصة فقط</p>
+               <h3 className="text-2xl font-black text-white">{lesson.price} <span className="text-[10px] opacity-40">ج.م</span></h3>
+               <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-black group-hover:text-blue-400">شراء الآن <FaChevronLeft size={8} /></div>
+            </button>
+          )}
+
+          {/* Option 2: Unlock Chapter */}
+          {chapter?.price > 0 && (
+            <button onClick={() => onEnrol('chapter', chapter.id)} className="flex-1 min-w-[200px] p-6 bg-blue-600/10 border border-blue-500/30 rounded-[2rem] hover:bg-blue-600/20 transition-all group">
+               <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">تفعيل الباب: {chapter.title}</p>
+               <h3 className="text-2xl font-black text-white">{chapter.price} <span className="text-[10px] opacity-40">ج.م</span></h3>
+               <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-black group-hover:text-blue-400">توفير 15% <FaChevronLeft size={8} /></div>
+            </button>
+          )}
+
+          {/* Option 3: Unlock Full Course */}
+          <button onClick={() => onEnrol('course', course?.id)} className="flex-1 min-w-[200px] p-6 bg-gradient-to-r from-blue-600 to-indigo-700 border border-white/10 rounded-[2rem] hover:scale-105 transition-all shadow-2xl shadow-blue-900/40 relative overflow-hidden group">
+             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-150 transition-transform"><FaRocket size={40} /></div>
+             <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-2">تفعيل الكورس بالكامل</p>
+             <h3 className="text-2xl font-black text-white">
+                {course?.original_price > course?.digital_full_price && (
+                  <span className="text-sm font-bold text-blue-200/50 line-through ml-2">{course.original_price}</span>
+                )}
+                {course?.digital_full_price || 0} <span className="text-[10px] opacity-60">ج.م</span>
+             </h3>
+             <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-black">الخيار الشامل <FaChevronLeft size={8} /></div>
+          </button>
+       </div>
+
+       <button onClick={() => onEnrol('code')} className="relative z-10 mt-10 text-[10px] font-black text-slate-500 hover:text-white transition-colors uppercase tracking-[0.2em] underline decoration-slate-700 underline-offset-8">أو تفعيل بواسطة كود (سنتر)</button>
     </div>
    );
 }

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../../lib/supabase-browser';
 import { useAuth } from '../../../context/AuthContext';
 import { 
@@ -10,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 
 export default function StudentCoursesPage() {
+  const router = useRouter();
   const { user, centerId } = useAuth();
   const [courses, setCourses] = useState([]);
   const [fullEnrollments, setFullEnrollments] = useState([]);
@@ -223,6 +225,7 @@ export default function StudentCoursesPage() {
                           accessType={isFull ? 'full' : 'partial'}
                           index={i}
                           examsCount={courseExamsCount[course.id] || 0}
+                          router={router}
                         />
                       );
                    })}
@@ -252,7 +255,7 @@ export default function StudentCoursesPage() {
 
                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-8 md:gap-12">
                   {availableCourses.map((course, i) => (
-                     <CourseCard key={course.id} course={course} isEnrolled={false} index={i} />
+                     <CourseCard key={course.id} course={course} isEnrolled={false} index={i} router={router} />
                   ))}
                </div>
             </section>
@@ -274,112 +277,109 @@ export default function StudentCoursesPage() {
 }
 
 // 💎 THE ULTIMATE COURSE CARD 💎
-function CourseCard({ course, isEnrolled, index, accessType, examsCount }) {
+function CourseCard({ course, isEnrolled, index, accessType, examsCount, centerType, router }) {
+  const getPrice = () => {
+    return course.digital_full_price || 0;
+  };
+
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, type: 'spring', damping: 20 }}
-    >
-      <Link
-         href={`/student/courses/${course.id}`}
-         className="group relative block"
+    <motion.div 
+       layout
+       initial={{ opacity: 0, y: 30 }}
+       animate={{ opacity: 1, y: 0 }}
+       transition={{ delay: index * 0.1, type: 'spring', damping: 20 }}
+       className="group relative bg-[#f8fafc] rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-200 hover:shadow-2xl transition-all duration-700 h-full flex flex-col"
+     >
+       <div 
+         onClick={() => {
+           if (isEnrolled) router.push(`/student/courses/${course.id}`);
+         }}
+         className={`flex flex-col h-full ${isEnrolled ? 'cursor-pointer' : ''}`}
        >
-          {/* 🌈 Glow Effect Layer */}
-          <div className={`absolute -inset-1 rounded-[3rem] opacity-0 group-hover:opacity-100 transition-all duration-700 blur-[20px]
-            ${isEnrolled ? 'bg-blue-600/20' : 'bg-slate-400/5'}`}></div>
-
-          <div className="relative bg-[#0d152a] rounded-[3rem] border border-white/5 overflow-hidden transition-all duration-500 group-hover:border-white/10 group-hover:-translate-y-2 flex flex-col h-full">
-
-             {/* 🖼️ Card Upper - Image/Visual */}
-             <div className="h-56 relative overflow-hidden">
-                <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-                   {course.thumbnail_url ? (
-                     <img 
-                       src={course.thumbnail_url} 
-                       alt={course.name} 
-                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
-                     />
-                   ) : (
-                     <div className="absolute inset-0 opacity-20 transition-transform duration-1000 group-hover:scale-110">
-                        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.4),transparent)]"></div>
-                        <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,rgba(99,102,241,0.2),transparent)]"></div>
-                        <FaBook className="absolute inset-0 m-auto text-[8rem] text-white/5 transform -rotate-12 transition-all duration-700 group-hover:rotate-0 group-hover:text-blue-500/10" />
-                     </div>
-                   )}
-                </div>
-
-                {/* Visual Overlays */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d152a] via-[#0d152a]/20 to-transparent"></div>
-
-                {/* Floating Meta */}
-                <div className="absolute top-6 left-6 flex flex-col gap-3">
-                   <div className="px-4 py-2 bg-black/40 backdrop-blur-xl rounded-2xl border border-white/10 flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.8)]"></div>
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest">{course.grade}</span>
-                   </div>
-                    {isEnrolled && (
-                       <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className={`px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 ${accessType === 'full' ? 'bg-emerald-500/90' : 'bg-amber-500/90'} text-white`}>
-                         <FaBolt size={10} />
-                         <span className="text-[10px] font-black uppercase italic">
-                            {accessType === 'full' ? 'وصول كامل' : 'وصول جزئي'}
-                         </span>
-                       </motion.div>
-                    )}
-                </div>
-
-                 {/* Course ID/Code Badge */}
-                 <div className="absolute bottom-6 right-8">
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.4em] mb-1">اسم المادة</p>
-                    <h3 className="text-2xl font-black text-white leading-none tracking-tight group-hover:text-blue-400 transition-colors uppercase">{course.name}</h3>
-                 </div>
-
-                 {/* 📊 Exams Notification Badge */}
-                 {examsCount > 0 && (
-                    <div className="absolute top-6 right-6 flex items-center gap-2 bg-pink-600 px-4 py-2 rounded-2xl shadow-2xl shadow-pink-900/40 border-b-4 border-pink-800 animate-bounce">
-                       <FaBolt size={10} className="text-white" />
-                       <span className="text-[10px] font-black text-white">{examsCount} اختبار جديد</span>
-                    </div>
-                 )}
+          {/* 🖼️ Premium Course Thumbnail */}
+          <div className="relative h-72 overflow-hidden">
+            {course.thumbnail_url ? (
+              <>
+                <img 
+                  src={course.thumbnail_url} 
+                  alt={course.name} 
+                  className="w-full h-full object-cover object-top transition-transform duration-1000 group-hover:scale-110" 
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+              </>
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
+                 <FaBook className="text-white/20 text-6xl rotate-12" />
               </div>
+            )}
+            <div className="absolute top-4 right-4 px-4 py-1.5 bg-blue-50/90 backdrop-blur-md rounded-xl border border-blue-100 text-[10px] font-black text-blue-600 shadow-lg">
+               {course.grade}
+            </div>
+          </div>
 
-             {/* 📝 Card Lower - Info */}
-             <div className="p-10 flex-1 flex flex-col">
-                <div className="flex items-center justify-between mb-8 group/inst">
-                   <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-white/[0.03] border border-white/5 rounded-2xl flex items-center justify-center text-slate-500 group-hover/inst:border-blue-500/30 group-hover/inst:text-blue-400 transition-all duration-500">
-                         <FaAward size={22} className="opacity-40 group-hover/inst:opacity-100" />
-                      </div>
-                       <div>
-                          <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1">المعلم</p>
-                          <h4 className="font-black text-slate-200 text-base">{course.instructors?.name || 'مدرس المادة'}</h4>
-                       </div>
+          <div className="p-8 flex-1 flex flex-col">
+             {/* 🏷️ Course Title */}
+             <div className="flex justify-between items-start mb-6">
+                <hgroup>
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">المادة</p>
+                   <h3 className="text-2xl font-black text-slate-800 leading-tight group-hover:text-red-600 transition-colors uppercase">{course.name}</h3>
+                </hgroup>
+                <div className="flex flex-col items-end">
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">سعر الكورس كامل</p>
+                   <div className="flex items-center gap-2">
+                      {course.original_price > course.digital_full_price && (
+                        <span className="text-sm font-bold text-slate-400 line-through decoration-red-500/50">{course.original_price}</span>
+                      )}
+                      <span className="text-2xl font-black text-red-600">{getPrice()} <span className="text-xs">جنيه</span></span>
                    </div>
-                   <div className="bg-white/[0.03] w-10 h-10 rounded-xl flex items-center justify-center group-hover:bg-blue-600/20 transition-all">
-                      <FaStar className="text-slate-800 group-hover:text-amber-400 transition-colors" />
+                   {course.digital_price > 0 && <span className="text-[10px] font-bold text-slate-400 -mt-1">أو {course.digital_price} للحصة</span>}
+                </div>
+             </div>
+
+             {/* ℹ️ Sub-details */}
+             <div className="space-y-3 mb-8">
+                <div className="flex items-center justify-between text-slate-400">
+                   <div className="flex items-center gap-2">
+                       <FaAward className="text-blue-500" size={14} />
+                       <span className="text-[11px] font-bold">مستر {course.instructors?.name || 'مصطفى'}</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                       <FaMagic size={12} className="text-amber-500" />
+                       <span className="text-[11px] font-bold">بداية من {new Date(course.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</span>
                    </div>
                 </div>
+                {course.description && (
+                   <p className="text-xs font-bold text-slate-500 line-clamp-2 leading-relaxed bg-slate-100/50 p-3 rounded-xl border border-slate-200/50">
+                      {course.description}
+                   </p>
+                )}
+             </div>
 
-                 <div className="mt-auto pt-6 border-t border-white/5">
-                    <div className={`w-full h-16 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all duration-500
-                      ${isEnrolled
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-2xl shadow-blue-900/40 relative overflow-hidden group/btn'
-                        : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10 hover:text-white'}
-                    `}>
-                        {isEnrolled ? (
-                          <>
-                            <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20 transform origin-left scale-x-0 group-hover/btn:scale-x-100 transition-transform duration-1000"></div>
-                            <FaPlayCircle size={16} className="animate-pulse" /> دخول المحتوى <FaChevronLeft size={10} className="animate-bounce-x" />
-                          </>
-                        ) : (
-                          <>تفعيل الكورس <FaLock size={12} className="opacity-40" /></>
-                        )}
-                    </div>
-                 </div>
+             {/* 🔘 Dual Actions style */}
+             <div className="mt-auto space-y-3">
+                {isEnrolled ? (
+                   <div className="w-full h-14 bg-white border-2 border-slate-200 text-slate-800 rounded-2xl font-black text-sm flex items-center justify-center hover:bg-slate-50 transition-all">
+                      دخول المحتوى
+                   </div>
+                ) : (
+                   <>
+                       <Link 
+                         href={`/student/courses/${course.id}`}
+                         className="w-full h-14 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-black text-sm flex items-center justify-center hover:bg-red-50 transition-all"
+                       >
+                         الدخول للكورس
+                       </Link>
+                      <Link 
+                        href={`/student/checkout/${course.id}`}
+                        className="w-full h-14 bg-red-600 text-white rounded-2xl font-black text-sm flex items-center justify-center shadow-lg shadow-red-900/20 hover:bg-red-700 transition-all active:scale-95"
+                      >
+                         الإشتراك في الكورس !
+                      </Link>
+                   </>
+                )}
              </div>
           </div>
-       </Link>
-     </motion.div>
+       </div>
+    </motion.div>
   );
 }

@@ -1,29 +1,124 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../../lib/supabase-browser';
 import { useAuth } from '../../../../context/AuthContext';
-import { FaTicketAlt, FaLock, FaCheckCircle, FaExclamationTriangle, FaArrowRight } from 'react-icons/fa';
+import { FaTicketAlt, FaLock, FaCheckCircle, FaExclamationTriangle, FaArrowRight, FaVideo, FaLayerGroup, FaGraduationCap } from 'react-icons/fa';
 
 export default function CourseActivationPage() {
   const { id: courseId } = useParams();
-  const router = useRouter();
   const { user, centerId } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const type = searchParams.get('type') || 'course'; // course, chapter, lesson
+  const targetId = searchParams.get('target');
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [course, setCourse] = useState(null);
+  const [targetProduct, setTargetProduct] = useState(null);
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMsg, setErrorMsg] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('voucher'); // voucher, online
   const [centerSettings, setCenterSettings] = useState(null);
+  const [fawryCode, setFawryCode] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('voucher'); // voucher, online
+
+  const handlePaymobPayment = async (method) => {
+     setLoading(true);
+     setErrorMsg('');
+     try {
+        const res = await fetch('/api/payments/paymob/initiate', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+              amount: getPrice(),
+              courseId,
+              targetType: type,
+              targetId,
+              centerId,
+              studentId: user.id,
+              paymentMethod: method
+           })
+        });
+
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        if (method === 'card') {
+           // Redirect to Paymob Iframe
+           const iframeId = centerSettings?.paymob_iframe_id || '843336'; // Default Fallback
+           window.location.href = `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${data.paymentToken}`;
+        } else {
+           // Fawry: Paymob returns the reference number in a separate call or specific flow
+           // For simplicity, let's assume the initiate API handles the Fawry registration and returns a code
+           // Actually, for Fawry, we need to call the pay API or look at the response from initiate (if modified)
+           // Let's adjust the initiate API to return the reference for Fawry if possible.
+           setFawryCode(data.fawryCode || 'جاري استخراج الكود...');
+           setStatus('awaiting_payment');
+           
+           // Re-fetch to get actual code if it was pending
+           if (data.paymentToken) {
+              const payRes = await fetch('https://accept.paymob.com/api/acceptance/payments/pay', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({
+                    source: { identifier: "fawry", integration_type: "fawry" },
+                    payment_token: data.paymentToken
+                 })
+              });
+              const payData = await payRes.json();
+              setFawryCode(payData.data.bill_reference);
+           }
+        }
+     } catch (err) {
+        setErrorMsg(err.message);
+        setStatus('error');
+     } finally {
+        setLoading(false);
+     }
+  };
 
   useEffect(() => {
     if (courseId) {
-      supabase.from('courses').select('*, instructors(name)').eq('id', courseId).single().then(({ data }) => setCourse(data));
-      supabase.from('center_settings').select('*').eq('center_id', centerId).maybeSingle().then(({ data }) => setCenterSettings(data));
+      fetchData();
     }
-  }, [courseId, centerId]);
+  }, [courseId, centerId, type, targetId]);
+
+  const fetchData = async () => {
+    // Fetch Course
+    const { data: crs } = await supabase.from('courses').select('*, instructors(name)').eq('id', courseId).single();
+    setCourse(crs);
+
+    // Fetch Target Product
+    if (type === 'lesson' && targetId) {
+      const { data } = await supabase.from('lessons').select('*').eq('id', targetId).single();
+      setTargetProduct(data);
+    } else if (type === 'chapter' && targetId) {
+      const { data } = await supabase.from('lesson_chapters').select('*').eq('id', targetId).single();
+      setTargetProduct(data);
+    }
+
+    // Fetch Settings
+    supabase.from('center_settings').select('*').eq('center_id', centerId).maybeSingle().then(({ data }) => setCenterSettings(data));
+  };
+
+  const getPrice = () => {
+    if (type === 'lesson') return targetProduct?.price || course?.digital_price || 0;
+    if (type === 'chapter') return targetProduct?.price || 0;
+    return course?.digital_full_price || 0;
+  };
+
+  const getTitle = () => {
+    if (type === 'lesson') return targetProduct?.title || 'حصة تعليمية';
+    if (type === 'chapter') return targetProduct?.title || 'باب تعليمي';
+    return course?.name || 'الكورس الكامل';
+  };
+
+  const getIcon = () => {
+    if (type === 'lesson') return <FaVideo size={48} />;
+    if (type === 'chapter') return <FaLayerGroup size={48} />;
+    return <FaGraduationCap size={48} />;
+  };
 
   const handleActivate = async () => {
     if (!code) return;
@@ -132,11 +227,11 @@ export default function CourseActivationPage() {
       <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden text-center p-10 animate-in fade-in zoom-in duration-500">
          
          <div className="w-24 h-24 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
-            {status === 'success' ? <FaCheckCircle size={48} className="text-green-500 animate-bounce" /> : <FaTicketAlt size={48} />}
+            {status === 'success' ? <FaCheckCircle size={48} className="text-green-500 animate-bounce" /> : getIcon()}
          </div>
 
          <h1 className="text-2xl font-black text-slate-800 mb-2">تفعيل المحتوى الرقمي</h1>
-         <p className="text-slate-500 font-bold mb-8">أنت على وشك تفعيل: <span className="text-blue-600">"{course?.name}"</span></p>
+         <p className="text-slate-500 font-bold mb-8">أنت على وشك تفعيل: <br/><span className="text-blue-600">{getTitle()}</span></p>
 
          {status === 'success' ? (
            <div className="bg-green-50 text-green-700 p-6 rounded-2xl font-black">
@@ -185,16 +280,38 @@ export default function CourseActivationPage() {
                  </div>
               ) : (
                 <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-4">
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">القيمة المطلوب دفعها</p>
-                       <div className="text-4xl font-black text-slate-900 text-center">{course?.price || 0} <span className="text-sm">ج.م</span></div>
+                     <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">القيمة المطلوب دفعها</p>
+                        <div className="text-4xl font-black text-slate-900 text-center">{getPrice()} <span className="text-sm">ج.م</span></div>
+                     </div>
+                    
+                    {/* Payment Options: Card or Fawry */}
+                    <div className="grid grid-cols-2 gap-3">
+                       <button 
+                         onClick={() => handlePaymobPayment('card')}
+                         disabled={loading}
+                         className="h-16 bg-blue-600 text-white rounded-2xl font-black shadow-lg hover:bg-blue-700 transition flex flex-col items-center justify-center gap-1"
+                       >
+                          <span className="text-xs">بطاقة بنكية</span>
+                          <span className="text-[8px] opacity-70">Visa / Master / Meeza</span>
+                       </button>
+                       <button 
+                         onClick={() => handlePaymobPayment('fawry')}
+                         disabled={loading}
+                         className="h-16 bg-orange-500 text-white rounded-2xl font-black shadow-lg hover:bg-orange-600 transition flex flex-col items-center justify-center gap-1"
+                       >
+                          <span className="text-xs">فوري (أمان)</span>
+                          <span className="text-[8px] opacity-70">رقم دفع فوري</span>
+                       </button>
                     </div>
-                    <button 
-                      onClick={() => alert('سيتم تحويلك لبوابة Paymob بمجرد تفعيل الحساب')}
-                      className="w-full h-14 bg-emerald-600 text-white rounded-2xl font-black shadow-xl shadow-emerald-500/20 hover:bg-emerald-700 transition hover:-translate-y-1 active:translate-y-0 flex items-center justify-center gap-3"
-                    >
-                      <FaLock size={14} /> استخراج رقم دفع (فوري)
-                    </button>
+
+                    {status === 'awaiting_payment' && fawryCode && (
+                       <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-3xl text-center animate-bounce">
+                          <p className="text-[10px] font-black text-amber-600 uppercase mb-2">رقم دفع فوري (صالح لـ 24 ساعة)</p>
+                          <div className="text-3xl font-black text-slate-900 tabular-nums">{fawryCode}</div>
+                          <p className="text-[10px] font-bold text-slate-500 mt-2">توجه لأقرب فرع فوري وادفع باستخدام هذا الرقم</p>
+                       </div>
+                    )}
                 </div>
               )}
 

@@ -412,10 +412,16 @@ export default function StudentDashboard() {
           .eq('is_published', true)
           .eq('is_electronic', true);
         
-        // Filter by group_id or course_id if applicable
+        // Filter by group_id, course_id AND exclude already taken exams
+        const takenExamIds = new Set(results?.map(r => r.exam_id) || []);
+        
         const enrolledExams = eExams?.filter(ex => {
           const studentGroups = [...new Set(Object.values(enrollment.group_ids || {}).filter(Boolean))];
           const studentCourses = enrollment.enrolled_courses || [];
+          
+          // Must not be already taken
+          if (takenExamIds.has(ex.id)) return false;
+
           return (!ex.group_id || studentGroups.includes(ex.group_id)) && 
                  (!ex.course_id || studentCourses.includes(ex.course_id));
         }) || [];
@@ -886,7 +892,7 @@ export default function StudentDashboard() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-lg md:text-2xl font-black text-gray-800 truncate">{centerSettings.name}</h1>
+                <h1 className="text-lg md:text-2xl font-black text-gray-800 truncate">أ/ {centerSettings.name}</h1>
                 <p className="text-[10px] md:text-sm text-gray-400 font-bold">{centerSettings.description}</p>
               </div>
             </div>
@@ -1020,7 +1026,7 @@ export default function StudentDashboard() {
                   📅 {days[nextLesson.day_of_week]}
                 </span>
                 <span className="bg-white/10 px-3 py-1 rounded-full whitespace-nowrap">
-                  👨‍🏫 م/ {nextLesson.groups?.courses?.instructors?.name || nextLesson.groups?.courses?.instructor || 'N/A'}
+                  👨‍🏫 أ/ {nextLesson.groups?.courses?.instructors?.name || nextLesson.groups?.courses?.instructor || 'N/A'}
                 </span>
               </div>
             )}
@@ -1215,7 +1221,7 @@ export default function StudentDashboard() {
                                                             <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 ${session.exam_id ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-blue-500'}`}>
                                                               {session.exam_id ? <FaFileAlt size={10} /> : <FaUserGraduate size={10} />}
                                                             </div>
-                                                            <span className="truncate">{session.exam_id ? `مادة / ${session.groups?.courses?.name}` : `م/ ${session.groups?.courses?.instructors?.name || session.groups?.courses?.instructor}`}</span>
+                                                            <span className="truncate">{session.exam_id ? `مادة / ${session.groups?.courses?.name}` : `أ/ ${session.groups?.courses?.instructors?.name || session.groups?.courses?.instructor}`}</span>
                                                         </div>
                                                     </div>
                                                     <div className="w-full sm:w-auto flex sm:flex-col justify-between items-center sm:items-end gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-50">
@@ -1343,7 +1349,7 @@ export default function StudentDashboard() {
                                             <h4 className="font-black text-slate-800 text-sm md:text-lg mb-1 group-hover:text-blue-600 transition-colors leading-tight">{res.exams.title}</h4>
                                             <p className="text-[10px] md:text-[11px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-2">
                                               <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-                                              {res.exams.courses?.name} — م/ {res.exams.courses?.instructors?.name || res.exams.courses?.instructor || 'غير محدد'}
+                                              {res.exams.courses?.name} — أ/ {res.exams.courses?.instructors?.name || res.exams.courses?.instructor || 'غير محدد'}
                                             </p>
                                         </div>
                                     </div>
