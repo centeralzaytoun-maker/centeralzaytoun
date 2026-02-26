@@ -38,7 +38,10 @@ export default function StudentLoginPage() {
       // لو كود الطالب مكرر في كذا سنتر
       const studentRecord = lookupData.students[0];
       const centerPrefix = studentRecord.center_id.split('-')[0];
-      const technicalEmail = `${studentCode.trim().toLowerCase()}@${centerPrefix}.center.com`;
+      
+      // بنستخدم الكود كما هو مخزن في الداتابيز فعلياً (لو الطالب نسي الداش مثلاً)
+      const canonicalId = studentRecord.matched_id || studentCode.trim();
+      const technicalEmail = `${canonicalId.toLowerCase()}@${centerPrefix}.center.com`;
 
       // 2. محاولة تسجيل الدخول
       const { data, error: authError } = await supabase.auth.signInWithPassword({

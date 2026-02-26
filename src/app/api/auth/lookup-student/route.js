@@ -22,11 +22,27 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Unique ID is required' }, { status: 400 });
     }
 
-    // Lookup student(s) with this ID across all centers
-    const { data: students, error } = await supabaseAdmin
+    const cleanId = uniqueId.trim();
+    
+    // 🔍 Smart Lookup Strategy
+    // 1. Try exact (case-insensitive)
+    let { data: students, error } = await supabaseAdmin
       .from('students')
-      .select('center_id, name, centers(name)')
-      .ilike('unique_id', uniqueId.trim());
+      .select('center_id, name, unique_id, centers(name)')
+      .ilike('unique_id', cleanId)
+      .limit(5);
+
+    // 2. Fallback: If no match and starts with S, try without S or with S-
+    if ((!students || students.length === 0) && cleanId.toUpperCase().startsWith('S')) {
+       const numericPart = cleanId.substring(1).replace(/^-/, ''); // Remove S and leading dash
+       const { data: fallbackStudents } = await supabaseAdmin
+         .from('students')
+         .select('center_id, name, unique_id, centers(name)')
+         .or(`unique_id.ilike.S-${numericPart},unique_id.ilike.${numericPart}`)
+         .limit(5);
+       
+       if (fallbackStudents?.length > 0) students = fallbackStudents;
+    }
 
     if (error) {
       console.error('Lookup Error:', error);
@@ -34,10 +50,11 @@ export async function GET(req) {
     }
 
     // Format the response
-    const results = students.map(s => ({
+    const results = (students || []).map(s => ({
       center_id: s.center_id,
       center_name: s.centers?.name || 'Unknown Center',
-      student_name: s.name
+      student_name: s.name,
+      matched_id: s.unique_id
     }));
 
     return NextResponse.json({ students: results });
