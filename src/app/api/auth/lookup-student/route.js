@@ -60,6 +60,11 @@ export async function GET(req) {
     return NextResponse.json({ students: results });
 
   } catch (err) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('CRITICAL LOOKUP ERROR:', err);
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      details: err.message,
+      stack: err.stack
+    }, { status: 500 });
   }
 }
