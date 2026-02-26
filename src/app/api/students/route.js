@@ -168,7 +168,8 @@ export async function POST(req) {
     // 🛡️ RE-FIX: Ensure the auth email ALWAYS matches the final uniqueId
     // If we generated a sequential ID, we must ignore the frontend provided email
     const finalUniqueId = uniqueId;
-    const finalEmail = `${finalUniqueId.toLowerCase()}@center.com`;
+    const centerPrefix = studentData.center_id.split('-')[0];
+    const finalEmail = `${finalUniqueId.toLowerCase()}@${centerPrefix}.center.com`;
     const finalPassword = studentData.password || (studentData.phone || "12345678");
 
     // Create auth user first

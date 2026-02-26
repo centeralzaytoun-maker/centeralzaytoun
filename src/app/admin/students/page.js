@@ -593,7 +593,8 @@ const handleSubmit = async (e) => {
         // --- أ- توليد بيانات الدخول (حالة الإضافة الجديدة) ---
         const uniqueId = "S-" + Math.floor(1000 + Math.random() * 9000);
         // 🔒 الحماية هنا: لو مفيش صلاحية، البيانات التقنية تبقى null
-        const technicalEmail = hasPortalAccess ? `${uniqueId.toLowerCase()}@center.com` : null;
+        const centerPrefix = centerId.split('-')[0];
+        const technicalEmail = hasPortalAccess ? `${uniqueId.toLowerCase()}@${centerPrefix}.center.com` : null;
         const password = formData.phone || "12345678"; 
 
         // 🎯 NEW: Generate PIN Code for Parent Access
@@ -693,7 +694,8 @@ const result = await response.json();
                 ? originalStudent.access_code 
                 : Math.floor(1000 + Math.random() * 9000).toString();
             
-            const technicalEmail = `${uniqueId.toLowerCase()}@center.com`;
+            const centerPrefix = centerId.split('-')[0];
+            const technicalEmail = `${uniqueId.toLowerCase()}@${centerPrefix}.center.com`;
             const password = formData.phone || "12345678";
 
             // 2. إرسال طلب PUT للـ API (عشان ينشئ اليوزر ويحدث البيانات)

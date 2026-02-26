@@ -27,8 +27,18 @@ export default function StudentLoginPage() {
     setError('');
 
     try {
-      // 1. تحويل الكود لإيميل تقني خلف الكواليس
-      const technicalEmail = `${studentCode.trim().toLowerCase()}@center.com`;
+      // 1. البحث عن الطالب عبر الـ API لجلب الـ center_id (لتجنب مشاكل الـ RLS قبل تسجيل الدخول)
+      const lookupRes = await fetch(`/api/auth/lookup-student?uniqueId=${encodeURIComponent(studentCode.trim())}`);
+      const lookupData = await lookupRes.json();
+
+      if (!lookupRes.ok || !lookupData.students || lookupData.students.length === 0) {
+        throw new Error('عذراً، كود الطالب غير صحيح أو غير مسجل في أي مركز.');
+      }
+
+      // لو كود الطالب مكرر في كذا سنتر
+      const studentRecord = lookupData.students[0];
+      const centerPrefix = studentRecord.center_id.split('-')[0];
+      const technicalEmail = `${studentCode.trim().toLowerCase()}@${centerPrefix}.center.com`;
 
       // 2. محاولة تسجيل الدخول
       const { data, error: authError } = await supabase.auth.signInWithPassword({
