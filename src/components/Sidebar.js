@@ -97,6 +97,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
   const adminItems = [
     { id: 'dash', label: 'الرئيسية (الإدارة)', href: '/admin/dashboard', icon: <FaChartBar />, feature: 'dashboard:admin' }, 
     { id: 'staff', label: 'الموظفين', href: '/admin/staff', icon: <FaUserShield />, feature: 'staff:view' }, 
+    { id: 'attendance', label: 'سجل الحضور والانصراف', href: '/admin/staff/attendance', icon: <FaCalendarAlt />, feature: 'staff:view' },
     { id: 'settings', label: 'الإعدادات', href: '/admin/settings', icon: <FaCog />, feature: 'settings:general' }, 
     { id: 'permissions', label: 'أذونات الموظفين', href: '/admin/staff/permissions', icon: <FaUserShield />, feature: 'page_staff_permissions' },
     { id: 'finance_expenses', label: 'المصروفات', href: '/admin/expenses', icon: <FaFileInvoiceDollar />, feature: 'expenses:view' },
@@ -309,7 +310,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
                   <span className={`font-black text-sm whitespace-nowrap transition-all duration-300 origin-right
                     ${(!isOpen && !isMobileOpen) ? 'md:w-0 md:opacity-0 md:overflow-hidden md:absolute' : 'w-auto opacity-100 static'}
                   `}>
-                    {item.label}
+                    {item.id === 'dashboard' && centerType === 'instructor' ? 'حصص اليوم' : item.label}
                   </span>
                   {!isActive && (
                     <div 

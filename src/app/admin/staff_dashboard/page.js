@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   FaClock, FaUsers, FaChalkboardTeacher, 
-  FaCheckCircle, FaExclamationCircle, FaSpinner, FaArrowLeft, FaCalendarDay, FaTimesCircle, FaPlus, FaFileAlt, FaCoins
+  FaCheckCircle, FaExclamationCircle, FaSpinner, FaArrowLeft, FaCalendarDay, FaTimesCircle, FaPlus, FaFileAlt, FaCoins, FaUserClock, FaSignInAlt, FaSignOutAlt
 } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import { useAuth } from '../../../context/AuthContext';
@@ -55,6 +55,10 @@ export default function StaffDashboard() {
   const [showReportModal, setShowReportModal] = useState(false); // 📜 مودال تقرير اليوم
   const [currentUserName, setCurrentUserName] = useState('موظف عام'); // 👤 اسم الموظف الحالي
   const [centerSettings, setCenterSettings] = useState({ center_name: '', logo_url: '' }); // 🏢 إعدادات السنتر
+
+  // 🕐 Attendance State
+  const [attendanceRecord, setAttendanceRecord] = useState(null); // سجل حضور اليوم
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
   
   // ⏳ Live Progress Ticker - يخلي الصفحة تحس بالوقت
   const [ticker, setTicker] = useState(new Date());
@@ -80,9 +84,16 @@ export default function StaffDashboard() {
   useEffect(() => {
     if (centerId) {
       fetchDashboardData();
-      fetchCenterSettings(); // 🏢 جلب إعدادات السنتر
+      fetchCenterSettings();
     }
   }, [currentDay, centerId]);
+
+  // جلب حضور الموظف لما يتوفر user
+  useEffect(() => {
+    if (user && centerId) {
+      fetchMyAttendance(user.id);
+    }
+  }, [user, centerId]);
 
   // 🔄 حارس تغيير اليوم (Day Change Guard)
   useEffect(() => {
@@ -150,6 +161,91 @@ export default function StaffDashboard() {
     } catch (error) {
       setCenterSettings({ center_name: 'Smart Center', logo_url: '' });
     }
+  };
+
+  // 🕐 جلب سجل حضور الموظف الحالي لهذا اليوم
+  const fetchMyAttendance = async (userId) => {
+    if (!centerId || !userId) return;
+    const todayDate = new Date().toISOString().split('T')[0];
+    const { data } = await supabase
+      .from('staff_attendance')
+      .select('*')
+      .eq('center_id', centerId)
+      .eq('staff_id', userId)
+      .eq('date', todayDate)
+      .maybeSingle();
+    setAttendanceRecord(data || null);
+  };
+
+  // 📍 جلب GPS (اختياري — لا يمنع التسجيل لو رُفض)
+  const getGeoLocation = () => new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve({ lat: null, lng: null });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      ()    => resolve({ lat: null, lng: null }),
+      { timeout: 5000 }
+    );
+  });
+
+  // ✅ تسجيل الحضور (مع GPS + Device)
+  const handleCheckIn = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    setAttendanceLoading(true);
+
+    const { lat, lng } = await getGeoLocation();
+    const deviceInfo = navigator.userAgent.substring(0, 120);
+    const todayDate  = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase.from('staff_attendance').insert([{
+      center_id:   centerId,
+      staff_id:    session.user.id,
+      staff_name:  currentUserName,
+      check_in:    new Date().toISOString(),
+      date:        todayDate,
+      latitude:    lat,
+      longitude:   lng,
+      device_info: deviceInfo,
+      status:      'present'
+    }]).select().single();
+
+    if (!error && data) {
+      setAttendanceRecord(data);
+      const gpsNote = lat ? `\n📍 تم تسجيل موقعك` : `\n⚠️ الموقع الجغرافي غير مفعّل`;
+      alert(`✅ تم تسجيل حضورك بنجاح!${gpsNote}`);
+    } else {
+      alert('❌ حدث خطأ أثناء التسجيل: ' + error?.message);
+    }
+    setAttendanceLoading(false);
+  };
+
+  // 🚪 تسجيل الانصراف
+  const handleCheckOut = async () => {
+    if (!attendanceRecord) return;
+    setAttendanceLoading(true);
+
+    const checkOutTime = new Date().toISOString();
+    const diff = new Date(checkOutTime) - new Date(attendanceRecord.check_in);
+    const durationMinutes = Math.floor(diff / 60000);
+    const h = Math.floor(durationMinutes / 60);
+    const m = durationMinutes % 60;
+
+    const { data, error } = await supabase
+      .from('staff_attendance')
+      .update({
+        check_out:        checkOutTime,
+        duration_minutes: durationMinutes
+      })
+      .eq('id', attendanceRecord.id)
+      .select().single();
+
+    if (!error && data) {
+      setAttendanceRecord(data);
+      alert(`✅ تم تسجيل انصرافك!\n⏱️ مدة عملك: ${h} ساعة و${m} دقيقة`);
+    } else {
+      alert('❌ حدث خطأ أثناء التسجيل');
+    }
+    setAttendanceLoading(false);
   };
 
 
@@ -613,6 +709,75 @@ export default function StaffDashboard() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── ATTENDANCE CARD ── */}
+      <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100">
+        <div className="flex flex-col lg:flex-row items-center gap-6">
+          {/* Info */}
+          <div className="flex items-center gap-5 flex-1">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl shadow-lg flex-shrink-0 ${
+              !attendanceRecord ? 'bg-slate-100 text-slate-400' :
+              attendanceRecord.check_out ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-600 text-white'
+            }`}>
+              <FaUserClock />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">حضورك اليوم</p>
+              <h3 className="text-lg font-black text-slate-800">
+                {!attendanceRecord && 'لم تسجّل حضورك بعد'}
+                {attendanceRecord && !attendanceRecord.check_out && (
+                  <span className="text-blue-600">حاضر منذ {new Date(attendanceRecord.check_in).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
+                )}
+                {attendanceRecord?.check_out && (
+                  <span className="text-emerald-600">انصرفت — مدة عملك: {(() => {
+                    const diff = new Date(attendanceRecord.check_out) - new Date(attendanceRecord.check_in);
+                    const h = Math.floor(diff / 3600000);
+                    const m = Math.floor((diff % 3600000) / 60000);
+                    return `${h}س ${m}د`;
+                  })()}</span>
+                )}
+              </h3>
+              {attendanceRecord?.check_in && (
+                <p className="text-[11px] text-slate-400 font-bold mt-1">
+                  دخول: {new Date(attendanceRecord.check_in).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                  {attendanceRecord.check_out && (
+                    <> · خروج: {new Date(attendanceRecord.check_out).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 w-full lg:w-auto">
+            {!attendanceRecord && (
+              <button
+                onClick={handleCheckIn}
+                disabled={attendanceLoading}
+                className="flex-1 lg:flex-none h-14 px-8 bg-blue-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {attendanceLoading ? <FaSpinner className="animate-spin" /> : <FaSignInAlt />}
+                تسجيل الحضور
+              </button>
+            )}
+            {attendanceRecord && !attendanceRecord.check_out && (
+              <button
+                onClick={handleCheckOut}
+                disabled={attendanceLoading}
+                className="flex-1 lg:flex-none h-14 px-8 bg-slate-900 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-3 shadow-xl shadow-slate-200 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+              >
+                {attendanceLoading ? <FaSpinner className="animate-spin" /> : <FaSignOutAlt />}
+                تسجيل الانصراف
+              </button>
+            )}
+            {attendanceRecord?.check_out && (
+              <div className="flex-1 lg:flex-none h-14 px-8 bg-emerald-50 text-emerald-700 rounded-2xl font-black text-sm flex items-center justify-center gap-3 border border-emerald-100">
+                <FaCheckCircle /> تم تسجيل يومك بنجاح ✨
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── TIMELINE ── */}
