@@ -40,7 +40,19 @@ export default function StaffPage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
 
-  useEffect(() => { if (centerId) fetchStaff(); }, [centerId]);
+  // حد الموظفين من الباقة
+  const [maxStaff, setMaxStaff] = useState(null); // null = غير محدود
+
+  useEffect(() => { if (centerId) { fetchStaff(); fetchMaxStaff(); } }, [centerId]);
+
+  const fetchMaxStaff = async () => {
+    const { data: center } = await supabaseBrowser
+      .from('centers').select('package_id').eq('id', centerId).single();
+    if (!center?.package_id) return;
+    const { data: pkg } = await supabaseBrowser
+      .from('packages').select('max_staff').eq('id', center.package_id).single();
+    if (pkg?.max_staff) setMaxStaff(pkg.max_staff);
+  };
 
   const fetchStaff = async () => {
     if (!centerId) return;
@@ -178,10 +190,34 @@ export default function StaffPage() {
             إدارة الموظفين
           </h1>
           <p className="text-gray-400 text-[10px] md:text-xs font-bold mt-2">يمكنك إضافة سكرتارية، مدرسين، أو مسؤولين للنظام والتحكم في صلاحياتهم</p>
+          {/* عداد الموظفين */}
+          {maxStaff && (
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex-1 max-w-[180px] h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    staff.length >= maxStaff ? 'bg-red-500' :
+                    staff.length >= maxStaff * 0.8 ? 'bg-amber-400' : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min((staff.length / maxStaff) * 100, 100)}%` }}
+                />
+              </div>
+              <span className={`text-[10px] font-black ${
+                staff.length >= maxStaff ? 'text-red-600' : 'text-gray-500'
+              }`}>
+                {staff.length} / {maxStaff} موظف
+                {staff.length >= maxStaff && ' — وصلت للحد الأقصى'}
+              </span>
+            </div>
+          )}
         </div>
-        <button onClick={() => setIsModalOpen(true)}
-          className="w-full md:w-auto bg-gray-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-gray-200 hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-3 active:scale-95">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          disabled={maxStaff !== null && staff.length >= maxStaff}
+          className="w-full md:w-auto bg-gray-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-gray-200 hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
           <FaUserPlus /> موظف جديد
+          {maxStaff !== null && staff.length >= maxStaff && <span className="text-xs opacity-70">— الحد الأقصى</span>}
         </button>
       </div>
 

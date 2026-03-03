@@ -55,6 +55,7 @@ export default function SuperAdminDashboard() {
         price: '',
         duration_days: 180,
         max_students: '',
+        max_staff: '',
         features: [] 
     });
 
@@ -326,7 +327,8 @@ export default function SuperAdminDashboard() {
                         name: pkgForm.name,
                         price: Number(pkgForm.price),
                         duration_days: Number(pkgForm.duration_days),
-                        max_students: pkgForm.max_students ? Number(pkgForm.max_students) : null
+                        max_students: pkgForm.max_students ? Number(pkgForm.max_students) : null,
+                        max_staff:    pkgForm.max_staff    ? Number(pkgForm.max_staff)    : null
                     })
                     .eq('id', editingPackageId);
                 
@@ -344,6 +346,7 @@ export default function SuperAdminDashboard() {
                         price: Number(pkgForm.price),
                         duration_days: Number(pkgForm.duration_days),
                         max_students: pkgForm.max_students ? Number(pkgForm.max_students) : null,
+                        max_staff:    pkgForm.max_staff    ? Number(pkgForm.max_staff)    : null,
                         is_active: true
                     }])
                     .select()
@@ -779,7 +782,7 @@ export default function SuperAdminDashboard() {
                                     {editingPackageId ? <FaEdit className="text-yellow-500"/> : <FaPlus className="text-blue-500"/>}
                                     {editingPackageId ? 'تعديل بيانات الباقة' : 'باقة جديدة'}
                                 </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                                     <div>
                                         <label className="text-xs font-bold text-slate-500 block mb-2">اسم الباقة</label>
                                         <input type="text" required value={pkgForm.name} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" placeholder="مثال: الباقة الأساسية" />
@@ -793,8 +796,12 @@ export default function SuperAdminDashboard() {
                                         <input type="number" required min="1" value={pkgForm.duration_days} onChange={e => setPkgForm({...pkgForm, duration_days: e.target.value})} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" placeholder="مثال: 180" />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-bold text-slate-500 block mb-2">سعة الطلاب</label>
+                                        <label className="text-xs font-bold text-slate-500 block mb-2">سعة الطلاب 👨‍🎓</label>
                                         <input type="number" min="1" value={pkgForm.max_students} onChange={e => setPkgForm({...pkgForm, max_students: e.target.value})} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" placeholder="مفتوح لو فارغ" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 block mb-2">سعة الموظفين 👨‍💼</label>
+                                        <input type="number" min="1" value={pkgForm.max_staff} onChange={e => setPkgForm({...pkgForm, max_staff: e.target.value})} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" placeholder="مفتوح لو فارغ" />
                                     </div>
                                 </div>
 

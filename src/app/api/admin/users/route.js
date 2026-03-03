@@ -67,6 +67,38 @@ export async function POST(request) {
       );
     }
 
+    // ── التحقق من حد الموظفين في باقة السنتر ──
+    // 1. جلب باقة السنتر
+    const { data: centerData } = await supabaseAdmin
+      .from('centers')
+      .select('package_id')
+      .eq('id', centerId)
+      .single();
+
+    if (centerData?.package_id) {
+      // 2. جلب الحد الأقصى من الباقة
+      const { data: pkgData } = await supabaseAdmin
+        .from('packages')
+        .select('max_staff, name')
+        .eq('id', centerData.package_id)
+        .single();
+
+      if (pkgData?.max_staff !== null && pkgData?.max_staff !== undefined) {
+        // 3. حساب عدد الموظفين الحاليين
+        const { count } = await supabaseAdmin
+          .from('staff_profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('center_id', centerId);
+
+        if (count >= pkgData.max_staff) {
+          return NextResponse.json(
+            { error: `وصلت للحد الأقصى من الموظفين (${pkgData.max_staff}) في باقة "${pkgData.name}". يرجى الترقية لباقة أعلى.` },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // ✅ التعديل هنا: ضفنا user_metadata
     const { data: user, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
