@@ -54,16 +54,15 @@ CREATE POLICY "staff_own_records" ON staff_attendance
   WITH CHECK (auth.uid() = staff_id);
 
 -- سياسة 2: الأدمن يشوف ويعدل كل سجلات مركزه
--- (نستخدم center_admins أو centers table حسب schema بتاعك)
 CREATE POLICY "admin_center_records" ON staff_attendance
   FOR ALL
   USING (
     center_id IN (
       SELECT c.id FROM centers c WHERE c.owner_id = auth.uid()
       UNION
-      SELECT s.center_id FROM staff s 
-        WHERE s.user_id = auth.uid() 
-          AND s.role IN ('admin', 'manager')
+      SELECT sp.center_id FROM staff_profiles sp
+        WHERE sp.id = auth.uid()
+          AND sp.role IN ('admin', 'manager', 'owner')
     )
   );
 
