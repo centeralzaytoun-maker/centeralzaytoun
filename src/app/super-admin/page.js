@@ -256,6 +256,7 @@ export default function SuperAdminDashboard() {
             { id: 'page_notifications', name: 'مركز البث الإخباري', description: 'إرسال إشعارات عامة لكل الطلاب' },
             { id: 'page_staff', name: 'إدارة الموظفين والمناديب', description: 'إدارة بيانات الموظفين وصلاحياتهم' },
             { id: 'page_staff_permissions', name: 'نظام أذونات الوصول', description: 'التحكم الدقيق في أذونات الموظفين' },
+            { id: 'page_staff_attendance', name: 'سجل الحضور والانصراف', description: 'تقارير حضور الموظفين اليومية والشهرية مع كشف التأخير والغياب' },
             { id: 'page_settings', name: 'إدارة الإعدادات والبراند', description: 'التحكم في اللوجو، الألوان، واسم السنتر' },
             { id: 'page_audit', name: 'سجل الرقابة (Audit)', description: 'متابعة سجل العمليات التي قام بها الموظفين' },
             { id: 'page_lessons', name: 'المحتوى الرقمي (LMS)', description: 'تفعيل رفع الفيديوهات والحصص الأونلاين' },

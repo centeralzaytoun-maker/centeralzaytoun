@@ -35,7 +35,7 @@ const toLocalDatetimeInput = (isoStr) => {
 export default function StaffAttendancePage() {
   const { centerId, allowedFeatures, loading: authLoading, user } = useAuth();
 
-  if (!authLoading && allowedFeatures && !allowedFeatures.includes('staff:view')) {
+  if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_staff_attendance')) {
     return <AccessDenied />;
   }
 
