@@ -36,46 +36,51 @@ export const useExpenses = (initialMonth) => {
     setLoading(false);
   }, [selectedMonth, centerId]);
 
-  // 2. 🆕 Fetch Live Balance Logic (حساب يدوي آمن لكل سنتر)
+  // 2. Fetch Live Balance Logic
   const fetchBalance = useCallback(async () => {
     if (!centerId) return;
-    
+
     try {
-        // حساب إيرادات الحصص (من جدول الحضور)
-        const { data: attData } = await supabase
-            .from('attendance')
-            .select('amount_paid')
-            .eq('center_id', centerId);
-        
-        const sessions_net = attData?.reduce((acc, curr) => acc + (Number(curr.amount_paid) || 0), 0) || 0;
+      // ✅ FIX 1: 'attendance' table does not exist.
+      // Session revenue is stored in sessions.calculated_revenue —
+      // a denormalized sum written when the session is ended (is_completed = true).
+      // Querying the sessions table is correct: one row per session, no N+1.
+      //
+      // ✅ FIX 2: store_sales.total_price does not exist.
+      // The real column name is price_sold (see schema line 830).
+      const [{ data: sessionsData }, { data: storeData }, { data: expData }] = await Promise.all([
+        supabase
+          .from('sessions')
+          .select('calculated_revenue')
+          .eq('center_id', centerId)
+          .eq('is_completed', true),   // ← only finalized sessions have reliable revenue
 
-        // حساب إيرادات المتجر (من جدول مبيعات المتجر)
-        const { data: storeData } = await supabase
-            .from('store_sales')
-            .select('total_price')
-            .eq('center_id', centerId);
-        
-        const store_net = storeData?.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0) || 0;
+        supabase
+          .from('store_sales')
+          .select('price_sold')         // ← was: 'total_price' (column doesn't exist)
+          .eq('center_id', centerId),
 
-        // حساب إجمالي المصروفات "منذ البداية" لهذا السنتر
-        const { data: expData } = await supabase
-            .from('expenses')
-            .select('amount')
-            .eq('center_id', centerId);
-        
-        const expenses_total = expData?.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0) || 0;
+        supabase
+          .from('expenses')
+          .select('amount')
+          .eq('center_id', centerId),
+      ]);
 
-        const income_total = sessions_net + store_net;
+      const sessions_net  = sessionsData?.reduce((acc, row) => acc + (Number(row.calculated_revenue) || 0), 0) || 0;
+      const store_net     = storeData?.reduce((acc, row) => acc + (Number(row.price_sold)           || 0), 0) || 0;
+      const expenses_total = expData?.reduce((acc, row) => acc + (Number(row.amount)               || 0), 0) || 0;
 
-        setBalanceInfo({
-            income: income_total,
-            expenses: expenses_total,
-            balance: income_total - expenses_total,
-            sessions_net: sessions_net,
-            store_net: store_net
-        });
+      const income_total = sessions_net + store_net;
+
+      setBalanceInfo({
+        income:       income_total,
+        expenses:     expenses_total,
+        balance:      income_total - expenses_total,
+        sessions_net: sessions_net,
+        store_net:    store_net,
+      });
     } catch (err) {
-        console.error('Error computing balance:', err);
+      console.error('Error computing balance:', err);
     }
   }, [centerId]);
 

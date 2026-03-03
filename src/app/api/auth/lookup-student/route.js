@@ -39,19 +39,25 @@ export async function GET(req) {
       }, { status: 500 });
     }
 
-    // 🔍 Step 2: Fallback lookup (handling dash issues like S-100 vs S100)
-    if ((!students || students.length === 0) && cleanId.toUpperCase().startsWith('S')) {
-       const numericPart = cleanId.substring(1).replace(/^-/, '');
-       const { data: fallback, error: fbError } = await supabaseAdmin
-         .from('students')
-         .select('center_id, name, unique_id')
-         .or(`unique_id.ilike.S-${numericPart},unique_id.ilike.${numericPart}`)
-         .limit(1);
-       
-       if (fbError) {
-         console.error('Lookup Fallback Error:', fbError);
-       } else if (fallback?.length > 0) {
-         students = fallback;
+    // 🔍 Step 2: Fallback — strip any prefix and search by numeric part only
+    // This supports custom prefixes from center_settings: 'A100', 'أ100', 'M-200', 'S-100', etc.
+    if (!students || students.length === 0) {
+       // استخرج الجزء الرقمي بس (كل الحروف والداش في البداية)
+       const numericPart = cleanId.replace(/^[^\d]+/, '').trim(); // يشيل أي حروف أو داش في البداية
+
+       if (numericPart && numericPart !== cleanId) {
+         // ابحث عن أي كود ينتهي بنفس الرقم
+         const { data: fallback, error: fbError } = await supabaseAdmin
+           .from('students')
+           .select('center_id, name, unique_id')
+           .ilike('unique_id', `%${numericPart}`)
+           .limit(5); // جيب أكتر من نتيجة لو الرقم مكرر في سناتر كتير
+
+         if (fbError) {
+           console.error('Lookup Fallback Error:', fbError);
+         } else if (fallback?.length > 0) {
+           students = fallback;
+         }
        }
     }
 

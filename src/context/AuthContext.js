@@ -1,7 +1,8 @@
 'use client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase'; // تأكد من المسار الصحيح
+import { supabase } from '../lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
+import { getCachedAuthData, setCachedAuthData, clearCachedAuthData } from '../lib/auth-cache';
 
 const AuthContext = createContext({
   user: null,
@@ -140,13 +141,33 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
   // ==========================================
   const syncAuthState = async (event, currentSession) => {
     if (!isMounted.current || isSyncing.current) return;
-    
+
     isSyncing.current = true;
-    
+
+    const sessionUser = currentSession?.user || user;
+
+    // ✅ CACHE HIT: Skip all DB queries for recently authenticated users.
+    // Cache is invalidated on signOut() and expires after 5 minutes.
+    if (sessionUser?.id && event !== 'SIGNED_OUT') {
+      const cached = getCachedAuthData(sessionUser.id);
+      if (cached) {
+        if (isMounted.current) {
+          setSession(currentSession || null);
+          setUser(sessionUser);
+          if (cached.centerId) setCenterId(cached.centerId);
+          if (cached.role) setRole(cached.role);
+          setAllowedFeatures(cached.features);
+          setLoading(false);
+        }
+        isSyncing.current = false;
+        return; // ← zero DB queries for this auth event
+      }
+    }
+
     let targetCid = null;
     let targetRole = null;
     let targetFeatures = [];
-    let targetUser = currentSession?.user || user; 
+    let targetUser = sessionUser;
 
     try {
         // 1. التحقق من السنتر في الـ URL
@@ -240,27 +261,43 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
 
             if (centerData) {
                 const isExpired = centerData.subscription_end_date && new Date(centerData.subscription_end_date) < new Date();
-                if (centerData.is_active && !isExpired) {
+
+                // ✅ super_admin bypasses expiry & gets ALL permissions regardless of package
+                const isSuperAdmin = targetRole === 'super_admin';
+
+                if (isSuperAdmin || (centerData.is_active && !isExpired)) {
                     targetFeatures = centerData.packages?.package_features?.map(pf => pf.feature_id) || [];
-                    
-                    // 🔒 إضافة صلاحيات الموظف المحددة (Staff RBAC)
+
                     if (targetUser && targetRole) {
-                        if (targetRole === 'admin' || targetRole === 'super_admin') {
+                        if (isSuperAdmin) {
+                            // 👑 super_admin = كل صلاحيات النظام بدون استثناء (بما فيها page_*)
+                            const { data: allPerms } = await supabase.from('permissions').select('key');
+                            const allKeys = allPerms?.map(p => p.key) || [];
+                            targetFeatures = [...new Set([...targetFeatures, ...allKeys])];
+                            // تأكد إن page_super_admin موجودة حتى لو مش في جدول permissions بعد
+                            if (!targetFeatures.includes('page_super_admin')) {
+                                targetFeatures.push('page_super_admin');
+                            }
+                            console.log(`👑 super_admin: granted ${targetFeatures.length} permissions`);
+
+                        } else if (targetRole === 'admin') {
+                            // 🔒 admin عادي: كل الصلاحيات من permissions ماعدا صفحات page_*
+                            // (صفحات page_* بتيجي فقط من باقة السنتر)
                             const { data: allPerms } = await supabase.from('permissions').select('key');
                             const systemPerms = allPerms?.map(p => p.key) || [];
                             const filteredSystemPerms = systemPerms.filter(key => !key.toLowerCase().startsWith('page_'));
                             targetFeatures = [...new Set([...targetFeatures, ...filteredSystemPerms])];
+
                         } else {
+                            // 👤 موظف عادي (staff): فقط الصلاحيات المحددة له
                             const { data: staffPerms } = await supabase
                                 .from('staff_permissions')
                                 .select('permission_key')
                                 .eq('staff_id', targetUser.id)
                                 .eq('center_id', targetCid);
-                            
+
                             const specificPerms = staffPerms?.map(p => p.permission_key) || [];
                             console.log(`🔐 Fetched ${specificPerms.length} specific permissions for staff ${targetUser.id}`);
-                            // 🛡️ للموظف: ندمج ميزات الباقة (عشان السايدبار يعرف المديول متاح ولا لأ) 
-                            // مع الصلاحيات المحددة له فقط (عشان مياخدش حقه وحق غيره)
                             targetFeatures = [...new Set([...targetFeatures, ...specificPerms])];
                             console.log(`📡 Combined Features:`, targetFeatures);
                         }
@@ -287,6 +324,15 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
         setAllowedFeatures(targetFeatures);
         setLoading(false);
         isSyncing.current = false;
+
+        // ✅ Store in cache so the next page navigation skips all DB queries
+        if (targetUser?.id && targetCid) {
+          setCachedAuthData(targetUser.id, {
+            centerId: targetCid,
+            role: targetRole,
+            features: targetFeatures,
+          });
+        }
     } else {
         isSyncing.current = false;
     }
@@ -321,14 +367,19 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
 
   const signOut = async () => {
     const currentRole = role;
+    const currentUserId = user?.id;
+
     await supabase.auth.signOut();
+
+    // ✅ Invalidate the cache immediately on sign-out
+    if (currentUserId) clearCachedAuthData(currentUserId);
+
     setUser(null);
     setCenterId(null);
     setRole(null);
     setAllowedFeatures(null);
     localStorage.removeItem("active_center_id");
-    
-    // التوجيه الذكي بعد تسجيل الخروج
+
     if (currentRole === 'student') {
       router.push('/login');
     } else {

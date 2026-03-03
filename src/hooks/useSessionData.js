@@ -53,31 +53,24 @@ export const useSessionData = () => {
         sessionsQuery = sessionsQuery.range(from, to);
       }
 
-      // --- 🆕 Fetch All Students Logic ---
-      let allStudents = [];
-      let fetchMoreStudents = true;
-      let studentOffset = 0;
-      const STUDENT_BATCH_SIZE = 1000;
+      // ✅ PERFORMANCE FIX: Replaced the RAM-bomb while-loop.
+      // Old code: SELECT * on all students in batches → 50MB+ RAM, 10+ round-trips.
+      // New code: ONE query, only the 13 columns the session modal actually uses,
+      //           filtered to active students only (inactive don't attend sessions).
+      const { data: studentsData, error: studentsError } = await supabase
+        .from('students')
+        .select(`
+          id, name, unique_id, parent_phone, phone,
+          enrolled_courses, group_ids, wallet_balance,
+          subscription_type, free_courses, center_only_courses,
+          monthly_courses, is_active, course_discounts
+        `)
+        .eq('center_id', centerId)
+        .eq('is_active', true)
+        .limit(5000); // Safety cap — no center has >5000 active students
 
-      while (fetchMoreStudents) {
-        const { data: batch, error: batchError } = await supabase
-          .from('students')
-          .select('*')
-          .eq('center_id', centerId)
-          .range(studentOffset, studentOffset + STUDENT_BATCH_SIZE - 1);
-
-        if (batchError) throw batchError;
-        if (!batch || batch.length === 0) {
-          fetchMoreStudents = false;
-        } else {
-          allStudents = [...allStudents, ...batch];
-          if (batch.length < STUDENT_BATCH_SIZE) {
-            fetchMoreStudents = false;
-          } else {
-            studentOffset += STUDENT_BATCH_SIZE;
-          }
-        }
-      }
+      if (studentsError) throw studentsError;
+      const allStudents = studentsData || [];
 
       const [sRes, cRes, gRes, exRes, subRes] = await Promise.all([
         sessionsQuery,

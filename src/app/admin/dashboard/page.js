@@ -1745,7 +1745,20 @@ const calculateHealth = async () => {
       setLoading(false);
       return;
     }
-    
+
+    // ✅ Guard: '00000000-0000-0000-0000-000000000001' is a placeholder UUID
+    // set by the settings recovery tool when no real center exists.
+    // Querying Supabase with this UUID causes 502 + CORS errors because
+    // no row exists in the centers table for it.
+    const RESERVED_CENTER_ID = '00000000-0000-0000-0000-000000000001';
+    if (centerId === RESERVED_CENTER_ID) {
+      console.warn('⚠️ CenterHealthWidget: placeholder centerId detected — skipping DB queries.');
+      setScore(0);
+      setRisks([{ label: 'لم يتم ربط الحساب بسنتر حقيقي. يرجى التواصل مع الإدارة.', type: 'critical' }]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     let currentScore = 100;
     let detectedRisks = [];

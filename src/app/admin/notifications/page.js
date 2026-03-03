@@ -26,6 +26,7 @@ export default function AdminNotificationsPage() {
     // 🔍 Selection & Filter States
     const [targetType, setTargetType] = useState('all'); // all, group, student
     const [selectedGrade, setSelectedGrade] = useState(''); 
+    const [selectedInstructorName, setSelectedInstructorName] = useState('');
     const [selectedCourseId, setSelectedCourseId] = useState(''); 
     const [selectedTargetId, setSelectedTargetId] = useState(''); 
     const [searchTerm, setSearchTerm] = useState('');
@@ -128,13 +129,28 @@ export default function AdminNotificationsPage() {
     };
 
     // 🧪 Filtering Logic
-    const filteredCourses = useMemo(() => {
-        return courses.filter(c => !selectedGrade || c.grade === selectedGrade);
+    // ✅ Unique instructors from filtered courses by grade
+    const filteredInstructors = useMemo(() => {
+        const coursesForGrade = courses.filter(c => !selectedGrade || c.grade === selectedGrade);
+        const names = [...new Set(
+            coursesForGrade
+                .map(c => c.instructors?.name)
+                .filter(Boolean)
+        )];
+        return names;
     }, [courses, selectedGrade]);
 
+    const filteredCourses = useMemo(() => {
+        return courses.filter(c =>
+            (!selectedGrade || c.grade === selectedGrade) &&
+            (!selectedInstructorName || c.instructors?.name === selectedInstructorName)
+        );
+    }, [courses, selectedGrade, selectedInstructorName]);
+
     const filteredGroups = useMemo(() => {
-        return groups.filter(g => !selectedCourseId || g.course_id === selectedCourseId);
-    }, [groups, selectedCourseId]);
+        const validCourseIds = filteredCourses.map(c => c.id);
+        return groups.filter(g => validCourseIds.length === 0 || validCourseIds.includes(g.course_id));
+    }, [groups, filteredCourses]);
 
     const searchableStudents = useMemo(() => {
         let list = students;
@@ -183,8 +199,8 @@ export default function AdminNotificationsPage() {
 
     const handleSend = async (e) => {
         e.preventDefault();
-        if (targetType !== 'all' && !selectedTargetId && targetType !== 'student') {
-             return toast.error('يرجى تحديد الهدف (مجموعة أو كورس)');
+        if (targetType === 'group' && !selectedTargetId) {
+             return toast.error('يرجى تحديد المجموعة المستهدفة');
         }
         if (targetType === 'student' && !selectedTargetId) {
              return toast.error('يرجى اختيار الطالب المستهدف');
@@ -207,19 +223,32 @@ export default function AdminNotificationsPage() {
 
             if (targetList.length === 0) throw new Error('لا يوجد طلاب مستهدفين في هذا النطاق');
 
-            const currentCourse = courses.find(c => c.id === selectedCourseId);
+            // ✅ حل الكورس والمدرس: بالـ ID أولاً، ثم بالاسم، ثم fallback عام
+            const currentCourse =
+                courses.find(c => c.id === selectedCourseId) ||
+                (selectedInstructorName ? courses.find(c => c.instructors?.name === selectedInstructorName) : null) ||
+                null;
+
+            const resolvedInstructor = currentCourse?.instructors?.name || selectedInstructorName || 'المدرس';
+            const resolvedCourseName = currentCourse?.name || 'الكورس';
             const today = new Date().toLocaleDateString('ar-EG');
             const now = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
             const payload = targetList.map(st => ({
                 center_id: centerId,
                 student_id: st.id,
-                title: notification.title,
+                title: notification.title
+                    .replace(/\[student\]/g, st.name)
+                    .replace(/\[grade\]/g, st.grade || '')
+                    .replace(/\[course\]/g, resolvedCourseName)
+                    .replace(/\[instructor\]/g, resolvedInstructor)
+                    .replace(/\[date\]/g, today)
+                    .replace(/\[time\]/g, now),
                 message: notification.message
                     .replace(/\[student\]/g, st.name)
                     .replace(/\[grade\]/g, st.grade || '')
-                    .replace(/\[course\]/g, currentCourse?.name || 'الكورس')
-                    .replace(/\[instructor\]/g, currentCourse?.instructors?.name || 'المدرس')
+                    .replace(/\[course\]/g, resolvedCourseName)
+                    .replace(/\[instructor\]/g, resolvedInstructor)
                     .replace(/\[date\]/g, today)
                     .replace(/\[time\]/g, now),
                 type: notification.type,
@@ -316,7 +345,7 @@ export default function AdminNotificationsPage() {
                                             <button 
                                                 key={type.id}
                                                 type="button"
-                                                onClick={() => { setTargetType(type.id); setSelectedTargetId(''); setSearchTerm(''); }}
+                                                onClick={() => { setTargetType(type.id); setSelectedTargetId(''); setSelectedInstructorName(''); setSearchTerm(''); }}
                                                 className={`h-24 rounded-3xl border-2 flex flex-col items-center justify-center gap-2 transition-all ${targetType === type.id ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200 -translate-y-1' : 'bg-white border-slate-50 text-slate-400 hover:border-blue-100 hover:bg-blue-50/50'}`}
                                             >
                                                 <span className="text-xl">{type.icon}</span>
@@ -333,19 +362,36 @@ export default function AdminNotificationsPage() {
                                             initial={{ opacity: 0, height: 0 }}
                                             animate={{ opacity: 1, height: 'auto' }}
                                             exit={{ opacity: 0, height: 0 }}
-                                            className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-200/50"
+                                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-200/50"
                                         >
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">تصفية حسب الصف</label>
                                                 <select 
                                                     value={selectedGrade}
-                                                    onChange={(e) => { setSelectedGrade(e.target.value); setSelectedCourseId(''); setSelectedTargetId(''); }}
+                                                    onChange={(e) => { setSelectedGrade(e.target.value); setSelectedInstructorName(''); setSelectedCourseId(''); setSelectedTargetId(''); }}
                                                     className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 text-xs font-black outline-none focus:ring-2 ring-blue-500/10 transition-all appearance-none"
                                                 >
                                                     <option value="">-- كل الصفوف --</option>
                                                     {stages.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                                                 </select>
                                             </div>
+
+                                            {/* 👨‍🏫 Instructor filter — shown for 'group' type when instructors exist */}
+                                            {targetType === 'group' && filteredInstructors.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase block mr-1">اختر المدرس</label>
+                                                    <select
+                                                        value={selectedInstructorName}
+                                                        onChange={(e) => { setSelectedInstructorName(e.target.value); setSelectedTargetId(''); }}
+                                                        className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 text-xs font-black outline-none focus:ring-2 ring-blue-500/10 transition-all appearance-none"
+                                                    >
+                                                        <option value="">-- كل المدرسين --</option>
+                                                        {filteredInstructors.map(name => (
+                                                            <option key={name} value={name}>{name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
 
                                             {targetType === 'group' && (
                                                 <div className="space-y-2">

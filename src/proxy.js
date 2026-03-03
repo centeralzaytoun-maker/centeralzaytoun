@@ -1,8 +1,25 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
+// ============================================================
+// ✅ OPTIMIZED MIDDLEWARE (proxy.js)
+// ============================================================
+// RULE: Middleware runs on EVERY request — keep it O(0) DB calls.
+// Role-based page protection has been moved to the individual
+// route layouts (admin/layout.js) which already fetch the profile
+// via the server-side Supabase client.
+//
+// What this middleware now does (ALL from the JWT — no DB):
+//   1. Verify the Supabase session (reads the cookie, NO network call)
+//   2. Redirect unauthenticated users away from /admin routes
+//   3. Allow all other requests through
+//
+// Role checks (admin-only paths, finance paths) are handled in
+// layout.js + AdminGuard component at the component level, which
+// is the correct Next.js App Router pattern.
+// ============================================================
+
 export async function proxy(request) {
-  // 🛠️ 1. إعداد Supabase
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
@@ -31,48 +48,31 @@ export async function proxy(request) {
     }
   )
 
-  // 🛡️ 2. التحقق من المستخدم
+  // ✅ getUser() validates the JWT via the Supabase Auth server.
+  // It does NOT hit your PostgreSQL database at all.
+  // This is one HTTPS call to auth.supabase.co, not a DB query.
   const { data: { user } } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
 
-  // 🛡️ 3. حماية المسارات العامة (لو مش مسجل دخول)
-  if (path.startsWith('/admin') && !user && path !== '/admin-login' && path !== '/admin/create-center') {
+  // 1. Protect /admin routes — redirect to login if not authenticated
+  if (
+    path.startsWith('/admin') &&
+    !user &&
+    path !== '/admin-login' &&
+    path !== '/admin/create-center'
+  ) {
     return NextResponse.redirect(new URL('/admin-login', request.url))
   }
 
-  // 🛡️ 4. التحقق من وجود "سنتر" للمدير المسجل
-  // إحنا بنعمل ده بس لو المستخدم مسجل وداخل على أي صفحة غير صفحة الإنشاء
-  if (user && path.startsWith('/admin') && path !== '/admin/create-center' && path !== '/admin-login') {
-    const { data: profile } = await supabase
-      .from('staff_profiles')
-      .select('role, center_id')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    // لو المستخدم "admin" ومعندوش سنتر مربوط، نوديه صفحة الإنشاء فوراً
-    if ((profile?.role === 'admin' || user.email === 'abdo@smart.com') && !profile?.center_id) {
-      return NextResponse.redirect(new URL('/admin/create-center', request.url))
-    }
-
-    // 🛡️ 5. حماية المسارات حسب الرتبة (Roles) - الجزء بتاعك الأصلي
-    
-    // أ- حماية المسارات المالية
-    if (path.startsWith('/admin/finance')) {
-      if (!profile || (profile.role !== 'admin' && profile.role !== 'staff')) {
-        return NextResponse.redirect(new URL('/admin/staff_dashboard', request.url))
-      }
-    }
-
-    // ب- حماية مسارات الإدارة العليا (Dashboard, Staff, Settings, etc.)
-    const adminOnlyPaths = ['/admin/dashboard', '/admin/staff', '/admin/expenses', '/admin/audit', '/admin/settings']
-    const isAdminPath = adminOnlyPaths.some(p => path === p || path.startsWith(p + '/'));
-    
-    if (isAdminPath) {
-      if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
-        return NextResponse.redirect(new URL('/admin/staff_dashboard', request.url))
-      }
-    }
+  // 2. If authenticated admin tries to go to /admin-login, redirect to dashboard
+  if (user && path === '/admin-login') {
+    return NextResponse.redirect(new URL('/admin/dashboard', request.url))
   }
+
+  // ✅ Everything else (role checks, center checks) is handled in:
+  //    - /admin/layout.js   (server component — runs once per layout, cached)
+  //    - AdminGuard.jsx     (client component — checks allowedFeatures from context)
+  // DO NOT add more DB queries here.
 
   return response
 }

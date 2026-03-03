@@ -187,83 +187,63 @@ export default function StudentsPage() {
 
 
   const fetchData = async () => {
-
     try {
+      // ✅ PERF FIX: Run all 5 queries in parallel instead of sequentially.
+      // Also replaced select('*') on center_settings — was fetching ~40 columns
+      // when only 4 are used: primary_color, center_name, logo_url, whatsapp_template.
+      const [
+        { data: coursesData, error: courseError },
+        { data: groupsData },
+        { data: stagesData },
+        { data: configData },
+        { data: centerData },
+      ] = await Promise.all([
+        supabaseBrowser
+          .from('courses')
+          .select('id, name, grade, price, digital_price, digital_full_price, instructors(id, name)')
+          .eq('center_id', centerId),
 
-      // Fetch courses
+        supabaseBrowser
+          .from('groups')
+          .select('*, courses(name, grade)')
+          .eq('center_id', centerId),
 
-      const { data: coursesData, error: courseError } = await supabaseBrowser
-        .from('courses')
-        .select(`
-          *,
-          instructors (
-            id,
-            name
-          )
-        `)
-        .eq('center_id', centerId);
+        supabaseBrowser
+          .from('educational_stages')
+          .select('name')
+          .order('sort_order', { ascending: true })
+          .eq('center_id', centerId),
+
+        // ✅ Only the 4 columns actually used by the UI + print functions:
+        //   primary_color  → print styles, table headers, watermark colors
+        //   center_name    → print header h1 + watermark text
+        //   logo_url       → print header img
+        //   whatsapp_template → handleSendReport message template
+        supabaseBrowser
+          .from('center_settings')
+          .select('primary_color, center_name, logo_url, whatsapp_template')
+          .eq('center_id', centerId)
+          .maybeSingle(),
+
+        supabaseBrowser
+          .from('centers')
+          .select('center_type')
+          .eq('id', centerId)
+          .single(),
+      ]);
 
       if (courseError) throw courseError;
 
       setCourses(coursesData || []);
-
-
-
-      // Fetch groups
-
-      const { data: groupsData } = await supabaseBrowser
-        .from('groups')
-        .select('*, courses(name, grade)')
-        .eq('center_id', centerId);
-
       setGroups(groupsData || []);
-
-
-
-      // Fetch stages
-
-      const { data: stagesData } = await supabaseBrowser
-        .from('educational_stages')
-        .select('name')
-        .order('sort_order', { ascending: true })
-        .eq('center_id', centerId);
-
       setStages(stagesData || []);
-
-
-
-      // Fetch center config
-
-      const { data: configData } = await supabaseBrowser
-        .from('center_settings')
-        .select('*') 
-        .eq('center_id', centerId)
-        .maybeSingle();
-
-      if (configData) {
-        setCenterConfig(configData);
-      }
-
-      // Fetch center type
-      const { data: centerData } = await supabaseBrowser
-        .from('centers')
-        .select('center_type')
-        .eq('id', centerId)
-        .single();
-      if (centerData?.center_type) {
-        setCenterType(centerData.center_type);
-      }
-
-
+      if (configData) setCenterConfig(configData);
+      if (centerData?.center_type) setCenterType(centerData.center_type);
 
     } catch (error) {
-
-      console.error("Error:", error);
-
-      toast.error("حدث خطأ في تحميل البيانات");
-
+      console.error('Error:', error);
+      toast.error('حدث خطأ في تحميل البيانات');
     }
-
   };
 
 

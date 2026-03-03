@@ -35,21 +35,46 @@ export default function StudentLoginPage() {
         throw new Error('عذراً، كود الطالب غير صحيح أو غير مسجل في أي مركز.');
       }
 
-      // لو كود الطالب مكرر في كذا سنتر
-      const studentRecord = lookupData.students[0];
-      const centerPrefix = studentRecord.center_id.split('-')[0];
-      
-      // بنستخدم الكود كما هو مخزن في الداتابيز فعلياً (لو الطالب نسي الداش مثلاً)
-      const canonicalId = studentRecord.matched_id || studentCode.trim();
-      const technicalEmail = `${canonicalId.toLowerCase()}@${centerPrefix}.center.com`;
+      // ⚡ بناء كل الـ emails الممكنة لكل السناتر + الصيغتين القديمة والجديدة
+      // هذا يحل مشكلة التكرار: نفس الكود في كذا سنتر بصيغ مختلفة
+      const allStudents  = lookupData.students;
+      const studentRecord = allStudents[0]; // أول نتيجة للحصول على الـ matched_id
+      const canonicalId  = studentRecord.matched_id || studentCode.trim();
 
-      // 2. محاولة تسجيل الدخول
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: technicalEmail,
-        password: password,
-      });
 
-      if (authError) throw new Error(authError.message || 'بيانات الدخول غير صحيحة، تأكد من الكود وكلمة السر.');
+      const emailsToTry = [];
+      for (const s of allStudents) {
+        const prefix = s.center_id.split('-')[0];
+        emailsToTry.push(`${canonicalId.toLowerCase()}@${prefix}.center.com`); // الجديدة
+        emailsToTry.push(`${canonicalId.toLowerCase()}@center.com`);           // القديمة
+      }
+      // إزالة التكرار
+      const uniqueEmails = [...new Set(emailsToTry)];
+
+      console.log('🔍 Login Debug:', { studentCode, canonicalId, uniqueEmails });
+
+      // 2. جرب كل email حتى ينجح أحدهم
+      let data = null, authError = null;
+      for (const email of uniqueEmails) {
+        const { data: attempt, error: err } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        console.log('📧 Tried:', email, '→', err ? `❌ ${err.message}` : '✅ نجح');
+        if (!err && attempt?.user) {
+          data = attempt;
+          authError = null;
+          break;
+        }
+        authError = err;
+      }
+
+      if (!data || authError) {
+        throw new Error(
+          'لا يمكن الدخول بهذا الكود. يرجى التواصل مع سكرتارية السنتر\n' +
+          'للتأكد من تفعيل حساب البوابة الإلكترونية وصحة كلمة السر.'
+        );
+      }
 
       // 3. التحقق هل هذا المستخدم طالب فعلاً؟ مع فلترة حسب المركز
       const { data: student, error: studentError } = await supabase

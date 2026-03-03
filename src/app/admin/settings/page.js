@@ -217,7 +217,8 @@ export default function SettingsPage() {
     if (!center_id) return alert('خطأ: لم يتم التعرف على السنتر!');
 
     setSaving(true);
-    // حفظ center_settings
+
+    // 1️⃣ حفظ center_settings
     const { error } = await supabaseBrowser
       .from('center_settings')
       .upsert({
@@ -240,15 +241,31 @@ export default function SettingsPage() {
         whatsapp_number: settings.whatsapp_number,
       }, { onConflict: 'center_id' });
 
-
     if (error) {
       alert('حدث خطأ أثناء الحفظ: ' + error.message);
-    } else {
-      alert('✅ تم حفظ إعدادات السنتر بنجاح!');
-      window.location.reload();
+      setSaving(false);
+      return;
     }
+
+    // 2️⃣ مزامنة اسم السنتر في جدول centers (كان بيترك قديم)
+    // center_settings.center_name هو الاسم الظاهر للمستخدم
+    // centers.name هو اسم السنتر في قاعدة البيانات — لازم يتطابقوا
+    if (settings.center_name) {
+      const { error: centerNameError } = await supabaseBrowser
+        .from('centers')
+        .update({ name: settings.center_name })
+        .eq('id', center_id);
+
+      if (centerNameError) {
+        console.warn('⚠️ تم حفظ الإعدادات لكن فشل تحديث اسم السنتر:', centerNameError.message);
+      }
+    }
+
+    alert('✅ تم حفظ إعدادات السنتر بنجاح!');
+    window.location.reload();
     setSaving(false);
   };
+
 
   // ══════════════════════════════════════════════════════
   // Logo Upload
