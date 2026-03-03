@@ -187,7 +187,7 @@ export default function StaffDashboard() {
     );
   });
 
-  // ✅ تسجيل الحضور (مع GPS + Device)
+  // ✅ تسجيل الحضور (مع GPS + Device + كشف التأخير)
   const handleCheckIn = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
@@ -196,23 +196,48 @@ export default function StaffDashboard() {
     const { lat, lng } = await getGeoLocation();
     const deviceInfo = navigator.userAgent.substring(0, 120);
     const todayDate  = new Date().toISOString().split('T')[0];
+    const now        = new Date();
 
+    // 1️⃣ جلب الوقت المتوقع لهذا الموظف
+    let attendanceStatus = 'present';
+    let lateNote = '';
+
+    const { data: profileData } = await supabase
+      .from('staff_profiles')
+      .select('expected_check_in, late_tolerance_min')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (profileData?.expected_check_in) {
+      const [expH, expM] = profileData.expected_check_in.split(':').map(Number);
+      const tolerance    = profileData.late_tolerance_min || 15;
+      const expectedTime = new Date(now);
+      expectedTime.setHours(expH, expM, 0, 0);
+      const deadlineTime = new Date(expectedTime.getTime() + tolerance * 60000);
+      if (now > deadlineTime) {
+        const lateMinutes = Math.floor((now - expectedTime) / 60000);
+        attendanceStatus = 'late';
+        lateNote = `\n⚠️ تأخرت ${lateMinutes} دقيقة عن الوقت المحدد (${profileData.expected_check_in.slice(0,5)})`;
+      }
+    }
+
+    // 2️⃣ تسجيل الحضور
     const { data, error } = await supabase.from('staff_attendance').insert([{
       center_id:   centerId,
       staff_id:    session.user.id,
       staff_name:  currentUserName,
-      check_in:    new Date().toISOString(),
+      check_in:    now.toISOString(),
       date:        todayDate,
       latitude:    lat,
       longitude:   lng,
       device_info: deviceInfo,
-      status:      'present'
+      status:      attendanceStatus
     }]).select().single();
 
     if (!error && data) {
       setAttendanceRecord(data);
-      const gpsNote = lat ? `\n📍 تم تسجيل موقعك` : `\n⚠️ الموقع الجغرافي غير مفعّل`;
-      alert(`✅ تم تسجيل حضورك بنجاح!${gpsNote}`);
+      const gpsNote = lat ? `\n📍 تم تسجيل موقعك` : `\n⚠️ الموقع غير مفعّل`;
+      alert(`✅ تم تسجيل حضورك!${gpsNote}${lateNote}`);
     } else {
       alert('❌ حدث خطأ أثناء التسجيل: ' + error?.message);
     }

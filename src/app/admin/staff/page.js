@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabaseBrowser } from '../../../lib/supabase';
 import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
-import { FaUserPlus, FaTrash, FaUserShield, FaUserTie, FaSpinner, FaTimes } from 'react-icons/fa';
+import { FaUserPlus, FaTrash, FaUserShield, FaUserTie, FaSpinner, FaTimes, FaClock, FaCheck } from 'react-icons/fa';
 
 export default function StaffPage() {
   const { centerId, user } = useAuth(); // ← استخراج centerId من الـ context
@@ -18,6 +18,9 @@ export default function StaffPage() {
     password: '',
     role: 'staff'
   });
+
+  // تعديل وقت الحضور المتوقع
+  const [editingTime, setEditingTime] = useState(null); // { id, time, tolerance }
 
   useEffect(() => {
     if (centerId) {
@@ -109,6 +112,30 @@ export default function StaffPage() {
       alert("تم الحذف بنجاح 🗑️");
     } catch (error) {
       alert("فشل الحذف: " + error.message);
+    }
+  };
+
+  // ── تحديث وقت الحضور المتوقع ──
+  const handleUpdateCheckInTime = async (staffId) => {
+    if (!editingTime) return;
+    try {
+      const { error } = await supabaseBrowser
+        .from('staff_profiles')
+        .update({
+          expected_check_in:  editingTime.time,
+          late_tolerance_min: parseInt(editingTime.tolerance) || 15
+        })
+        .eq('id', staffId);
+      if (error) throw error;
+      setStaff(prev => prev.map(s =>
+        s.id === staffId
+          ? { ...s, expected_check_in: editingTime.time, late_tolerance_min: editingTime.tolerance }
+          : s
+      ));
+      setEditingTime(null);
+      alert('✅ تم حفظ وقت الحضور بنجاح');
+    } catch (e) {
+      alert('❌ خطأ أثناء الحفظ: ' + e.message);
     }
   };
 
