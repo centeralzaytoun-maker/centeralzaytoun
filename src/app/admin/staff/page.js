@@ -1,47 +1,36 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabaseBrowser } from '../../../lib/supabase';
-import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
+import { useAuth } from '../../../context/AuthContext';
 import { FaUserPlus, FaTrash, FaUserShield, FaUserTie, FaSpinner, FaTimes, FaClock, FaCheck } from 'react-icons/fa';
 
 export default function StaffPage() {
-  const { centerId, user } = useAuth(); // ← استخراج centerId من الـ context
+  const { centerId, user } = useAuth();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
-  
+
   // بيانات الفورم
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    role: 'staff'
-  });
+  const [formData, setFormData] = useState({ fullName: '', email: '', password: '', role: 'staff' });
 
   // تعديل وقت الحضور المتوقع
   const [editingTime, setEditingTime] = useState(null); // { id, time, tolerance }
 
-  useEffect(() => {
-    if (centerId) {
-      fetchStaff();
-    }
-  }, [centerId]);
+  useEffect(() => { if (centerId) fetchStaff(); }, [centerId]);
 
   const fetchStaff = async () => {
     if (!centerId) return;
-    
     try {
       const { data, error } = await supabaseBrowser
         .from('staff_profiles')
         .select('*')
-        .eq('center_id', centerId) // ← فلترة حسب المركز
+        .eq('center_id', centerId)
         .order('created_at', { ascending: false });
-      
       if (error) throw error;
       setStaff(data);
     } catch (error) {
-      console.error("Error fetching staff:", error);
+      console.error('Error fetching staff:', error);
     } finally {
       setLoading(false);
     }
@@ -50,68 +39,46 @@ export default function StaffPage() {
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setProcessing(true);
-
     try {
-      // نكلم الـ API اللي عملناه عشان ينشئ اليوزر
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          centerId: centerId // ← إضافة centerId للـ request
-        })
+        body: JSON.stringify({ ...formData, centerId })
       });
-
       const result = await res.json();
       if (!res.ok) throw new Error(result.error);
-
-      // 🕵️ سجل التدقيق (Audit Log)
       await supabaseBrowser.from('audit_logs').insert({
-          table_name: 'staff_profiles',
-          record_id: result.user?.user?.id,
-          action: 'INSERT',
-          user_id: user?.id,
-          center_id: centerId,
-          new_data: { details: `تسجيل موظف جديد: ${formData.fullName}`, role: formData.role, email: formData.email }
+        table_name: 'staff_profiles', record_id: result.user?.user?.id,
+        action: 'INSERT', user_id: user?.id, center_id: centerId,
+        new_data: { details: `تسجيل موظف جديد: ${formData.fullName}`, role: formData.role, email: formData.email }
       });
-
-      alert("تم إضافة الموظف بنجاح ✅");
+      alert('تم إضافة الموظف بنجاح ✅');
       setIsModalOpen(false);
       setFormData({ fullName: '', email: '', password: '', role: 'staff' });
-      fetchStaff(); // تحديث القائمة
-
+      fetchStaff();
     } catch (error) {
-      alert("خطأ: " + error.message);
+      alert('خطأ: ' + error.message);
     } finally {
       setProcessing(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("هل أنت متأكد من حذف هذا الموظف نهائياً؟")) return;
-
+    if (!confirm('هل أنت متأكد من حذف هذا الموظف نهائياً؟')) return;
     const member = staff.find(s => s.id === id);
-
     try {
-      // 🕵️ سجل التدقيق (Audit Log)
       await supabaseBrowser.from('audit_logs').insert({
-          table_name: 'staff_profiles',
-          record_id: id,
-          action: 'DELETE',
-          user_id: user?.id,
-          center_id: centerId,
-          old_data: member,
-          new_data: { details: `حذف موظف: ${member?.full_name || 'مجهول'}` }
+        table_name: 'staff_profiles', record_id: id, action: 'DELETE',
+        user_id: user?.id, center_id: centerId,
+        old_data: member, new_data: { details: `حذف موظف: ${member?.full_name || 'مجهول'}` }
       });
-
       const res = await fetch(`/api/admin/users?id=${id}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error);
-
       setStaff(staff.filter(s => s.id !== id));
-      alert("تم الحذف بنجاح 🗑️");
+      alert('تم الحذف بنجاح 🗑️');
     } catch (error) {
-      alert("فشل الحذف: " + error.message);
+      alert('فشل الحذف: ' + error.message);
     }
   };
 
@@ -129,7 +96,7 @@ export default function StaffPage() {
       if (error) throw error;
       setStaff(prev => prev.map(s =>
         s.id === staffId
-          ? { ...s, expected_check_in: editingTime.time, late_tolerance_min: editingTime.tolerance }
+          ? { ...s, expected_check_in: editingTime.time, late_tolerance_min: parseInt(editingTime.tolerance) }
           : s
       ));
       setEditingTime(null);
@@ -141,19 +108,19 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-4 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 p-2 md:p-0 pb-24 md:pb-10">
-      
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-gray-100">
         <div>
-           <h1 className="text-xl md:text-3xl font-black text-gray-800 flex items-center gap-3">
-             <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner">
-               <FaUserShield className="text-lg md:text-xl" />
-             </div>
-             إدارة الموظفين
-           </h1>
-           <p className="text-gray-400 text-[10px] md:text-xs font-bold mt-2 leading-relaxed">يمكنك إضافة سكرتارية، مدرسين، أو مسؤولين للنظام والتحكم في صلاحياتهم</p>
+          <h1 className="text-xl md:text-3xl font-black text-gray-800 flex items-center gap-3">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner">
+              <FaUserShield className="text-lg md:text-xl" />
+            </div>
+            إدارة الموظفين
+          </h1>
+          <p className="text-gray-400 text-[10px] md:text-xs font-bold mt-2 leading-relaxed">يمكنك إضافة سكرتارية، مدرسين، أو مسؤولين للنظام والتحكم في صلاحياتهم</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="w-full md:w-auto bg-gray-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-gray-200 hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-3 active:scale-95 text-sm md:text-base"
         >
@@ -179,42 +146,134 @@ export default function StaffPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 px-2 md:px-0">
           {staff.map((member) => (
             <div key={member.id} className="bg-white p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-blue-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden flex flex-col">
-               {/* Badge للصلاحية */}
-               <div className="flex justify-between items-start mb-6">
-                 <div className={`px-3 py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border ${
-                   member.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'
-                 }`}>
-                   {member.role === 'admin' ? 'مدير عام' : 'موظف / سكرتارية'}
-                 </div>
-                 <button 
-                    onClick={() => handleDelete(member.id)}
-                    className="w-8 h-8 bg-red-50 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm group-hover:scale-110 active:scale-90"
-                    title="حذف الموظف"
-                 >
-                    <FaTrash size={12} />
-                 </button>
-               </div>
 
-               <div className="flex items-center gap-4 mb-2">
-                 <div className={`w-14 h-14 md:w-16 md:h-16 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-xl md:text-2xl shadow-inner shrink-0 ${
-                    member.role === 'admin' ? 'bg-purple-100/50 text-purple-600' : 'bg-blue-100/50 text-blue-600'
-                 }`}>
-                    {member.role === 'admin' ? <FaUserShield /> : <FaUserTie />}
-                 </div>
-                 <div className="overflow-hidden">
-                    <h3 className="font-black text-gray-800 text-sm md:text-lg truncate leading-tight">{member.full_name}</h3>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold opacity-70 mt-1 uppercase tracking-tighter">ID: {member.id.split('-')[0]}</p>
-                 </div>
-               </div>
-               
-               <div className="mt-auto pt-6">
-                 <div className="bg-gray-50/50 rounded-2xl p-3 border border-gray-100/50">
-                    <p className="text-[10px] text-gray-400 font-bold text-center">تاريخ الانضمام</p>
-                    <p className="text-[11px] text-gray-700 font-black text-center mt-0.5" dir="ltr">
-                      {new Date(member.created_at).toLocaleDateString('ar-EG')}
+              {/* Badge + Delete */}
+              <div className="flex justify-between items-start mb-6">
+                <div className={`px-3 py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border ${
+                  member.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'
+                }`}>
+                  {member.role === 'admin' ? 'مدير عام' : 'موظف / سكرتارية'}
+                </div>
+                <button
+                  onClick={() => handleDelete(member.id)}
+                  className="w-8 h-8 bg-red-50 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm group-hover:scale-110 active:scale-90"
+                  title="حذف الموظف"
+                >
+                  <FaTrash size={12} />
+                </button>
+              </div>
+
+              {/* Name */}
+              <div className="flex items-center gap-4 mb-2">
+                <div className={`w-14 h-14 md:w-16 md:h-16 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-xl md:text-2xl shadow-inner shrink-0 ${
+                  member.role === 'admin' ? 'bg-purple-100/50 text-purple-600' : 'bg-blue-100/50 text-blue-600'
+                }`}>
+                  {member.role === 'admin' ? <FaUserShield /> : <FaUserTie />}
+                </div>
+                <div className="overflow-hidden">
+                  <h3 className="font-black text-gray-800 text-sm md:text-lg truncate leading-tight">{member.full_name}</h3>
+                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold opacity-70 mt-1 uppercase tracking-tighter">ID: {member.id.split('-')[0]}</p>
+                </div>
+              </div>
+
+              {/* Bottom Section */}
+              <div className="mt-auto pt-5 space-y-3">
+
+                {/* ── وقت الحضور المتوقع ── */}
+                {editingTime?.id === member.id ? (
+                  // حالة التعديل
+                  <div className="bg-blue-50 rounded-2xl p-3 border border-blue-100 space-y-3">
+                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
+                      <FaClock size={9} /> تعديل وقت الحضور
                     </p>
-                 </div>
-               </div>
+
+                    {/* وقت الحضور */}
+                    <div>
+                      <p className="text-[9px] text-slate-400 font-bold mb-1">الوقت المتوقع</p>
+                      <input
+                        type="time"
+                        value={editingTime.time}
+                        onChange={e => setEditingTime(prev => ({ ...prev, time: e.target.value }))}
+                        className="w-full h-10 px-3 bg-white rounded-xl text-sm font-black border-2 border-blue-200 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+
+                    {/* هامش التسامح */}
+                    <div>
+                      <p className="text-[9px] text-slate-400 font-bold mb-1">هامش التسامح (دقائق)</p>
+                      <div className="grid grid-cols-5 gap-1">
+                        {[5, 10, 15, 20, 30].map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setEditingTime(prev => ({ ...prev, tolerance: m }))}
+                            className={`h-8 rounded-xl text-[10px] font-black transition-all ${
+                              parseInt(editingTime.tolerance) === m
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-slate-500 border border-slate-200 hover:border-blue-300'
+                            }`}
+                          >
+                            {m}د
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* أزرار الحفظ والإلغاء */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleUpdateCheckInTime(member.id)}
+                        className="flex-1 h-10 bg-blue-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 hover:bg-blue-700 transition-all"
+                      >
+                        <FaCheck size={10} /> حفظ
+                      </button>
+                      <button
+                        onClick={() => setEditingTime(null)}
+                        className="flex-1 h-10 bg-white text-slate-500 rounded-xl text-xs font-black border border-slate-200 hover:bg-slate-50 transition-all"
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // حالة العرض العادية
+                  <button
+                    onClick={() => setEditingTime({
+                      id: member.id,
+                      time: member.expected_check_in?.slice(0, 5) || '09:00',
+                      tolerance: member.late_tolerance_min || 15
+                    })}
+                    className="w-full bg-gray-50 rounded-2xl p-3 border border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all text-right group/t"
+                  >
+                    <p className="text-[9px] text-gray-400 font-bold flex items-center gap-1.5">
+                      <FaClock size={9} className="text-blue-400" />
+                      وقت الحضور المتوقع
+                    </p>
+                    {member.expected_check_in ? (
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-sm font-black text-gray-800">
+                          {new Date(`2000-01-01T${member.expected_check_in}`).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black">
+                          ± {member.late_tolerance_min || 15}د
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs font-black text-blue-500 mt-1 group-hover/t:underline">
+                        اضغط لتحديد وقت الحضور ←
+                      </p>
+                    )}
+                  </button>
+                )}
+
+                {/* تاريخ الانضمام */}
+                <div className="bg-gray-50/50 rounded-2xl p-3 border border-gray-100/50">
+                  <p className="text-[10px] text-gray-400 font-bold text-center">تاريخ الانضمام</p>
+                  <p className="text-[11px] text-gray-700 font-black text-center mt-0.5" dir="ltr">
+                    {new Date(member.created_at).toLocaleDateString('ar-EG')}
+                  </p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -223,100 +282,82 @@ export default function StaffPage() {
       {/* Modal إضافة موظف */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[5000] flex items-end md:items-center justify-center p-0 md:p-4">
-           <div className="bg-white w-full max-w-md p-6 md:p-10 rounded-t-[2.5rem] md:rounded-[3rem] shadow-2xl animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-xl md:text-2xl font-black text-gray-800 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                    <FaUserPlus />
-                  </div>
-                  تسجيل موظف
-                </h2>
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
-                >
-                  <FaTimes />
+          <div className="bg-white w-full max-w-md p-6 md:p-10 rounded-t-[2.5rem] md:rounded-[3rem] shadow-2xl animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto custom-scrollbar">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl md:text-2xl font-black text-gray-800 flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                  <FaUserPlus />
+                </div>
+                تسجيل موظف
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">الاسم بالكامل</label>
+                <input required
+                  className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
+                  placeholder="مثال: أحمد محمد"
+                  value={formData.fullName}
+                  onChange={e => setFormData({...formData, fullName: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">البريد الإلكتروني (للدخول)</label>
+                <input type="email" required
+                  className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
+                  placeholder="employee@smart.com"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">كلمة المرور</label>
+                <input type="text" required minLength={6}
+                  className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
+                  placeholder="يفضل كلمة مرور قوية"
+                  value={formData.password}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">صلاحية الوصول</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setFormData({...formData, role: 'staff'})}
+                    className={`h-14 rounded-2xl font-black text-[10px] md:text-xs border-2 transition-all shadow-sm flex flex-col items-center justify-center leading-tight ${
+                      formData.role === 'staff' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-50 bg-gray-50 text-gray-400'
+                    }`}>
+                    <span>موظف</span>
+                    <span className="opacity-50 font-bold text-[9px] mt-0.5">سكرتارية / مساعد</span>
+                  </button>
+                  <button type="button" onClick={() => setFormData({...formData, role: 'admin'})}
+                    className={`h-14 rounded-2xl font-black text-[10px] md:text-xs border-2 transition-all shadow-sm flex flex-col items-center justify-center leading-tight ${
+                      formData.role === 'admin' ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-50 bg-gray-50 text-gray-400'
+                    }`}>
+                    <span>مدير عام</span>
+                    <span className="opacity-50 font-bold text-[9px] mt-0.5">Admin Full Access</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-6 flex flex-col sm:flex-row gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)}
+                  className="w-full bg-gray-100 text-gray-500 h-14 rounded-2xl font-black hover:bg-gray-200 transition-all active:scale-95 order-2 sm:order-1">
+                  إلغاء
+                </button>
+                <button disabled={processing}
+                  className="w-full bg-gray-900 text-white h-14 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl shadow-gray-200 order-1 sm:order-2">
+                  {processing ? <FaSpinner className="animate-spin"/> : <><FaUserPlus /> حفظ الموظف</>}
                 </button>
               </div>
-              
-              <form onSubmit={handleCreateUser} className="space-y-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">الاسم بالكامل</label>
-                    <input 
-                      required 
-                      className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 appearance-none opacity-100 placeholder:text-gray-400"
-                      placeholder="مثال: أحمد محمد"
-                      value={formData.fullName}
-                      onChange={e => setFormData({...formData, fullName: e.target.value})}
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">البريد الإلكتروني (للدخول)</label>
-                    <input 
-                      type="email" required 
-                      className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 appearance-none opacity-100 placeholder:text-gray-400"
-                      placeholder="employee@smart.com"
-                      value={formData.email}
-                      onChange={e => setFormData({...formData, email: e.target.value})}
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">كلمة المرور</label>
-                    <input 
-                      type="text" required minLength={6}
-                      className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 appearance-none opacity-100 placeholder:text-gray-400"
-                      placeholder="يفضل كلمة مرور قوية"
-                      value={formData.password}
-                      onChange={e => setFormData({...formData, password: e.target.value})}
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">صلاحية الوصول</label>
-                    <div className="grid grid-cols-2 gap-3">
-                       <button 
-                         type="button"
-                         onClick={() => setFormData({...formData, role: 'staff'})}
-                         className={`h-14 rounded-2xl font-black text-[10px] md:text-xs border-2 transition-all shadow-sm flex flex-col items-center justify-center leading-tight ${
-                           formData.role === 'staff' 
-                           ? 'border-blue-600 bg-blue-50 text-blue-700' 
-                           : 'border-gray-50 bg-gray-50 text-gray-400'
-                         }`}
-                       >
-                         <span>موظف</span>
-                         <span className="opacity-50 font-bold text-[9px] mt-0.5">سكرتارية / مساعد</span>
-                       </button>
-                       <button 
-                         type="button"
-                         onClick={() => setFormData({...formData, role: 'admin'})}
-                         className={`h-14 rounded-2xl font-black text-[10px] md:text-xs border-2 transition-all shadow-sm flex flex-col items-center justify-center leading-tight ${
-                           formData.role === 'admin' 
-                           ? 'border-purple-600 bg-purple-50 text-purple-700' 
-                           : 'border-gray-50 bg-gray-50 text-gray-400'
-                         }`}
-                       >
-                         <span>مدير عام</span>
-                         <span className="opacity-50 font-bold text-[9px] mt-0.5">Admin Full Access</span>
-                       </button>
-                    </div>
-                 </div>
-
-                 <div className="pt-6 flex flex-col sm:flex-row gap-3">
-                    <button 
-                      type="button" 
-                      onClick={() => setIsModalOpen(false)}
-                      className="w-full bg-gray-100 text-gray-500 h-14 rounded-2xl font-black hover:bg-gray-200 transition-all active:scale-95 order-2 sm:order-1"
-                    >
-                      إلغاء
-                    </button>
-                    <button 
-                      disabled={processing}
-                      className="w-full bg-gray-900 text-white h-14 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl shadow-gray-200 order-1 sm:order-2"
-                    >
-                      {processing ? <FaSpinner className="animate-spin"/> : <><FaUserPlus /> حفظ الموظف</>}
-                    </button>
-                 </div>
-              </form>
-           </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
