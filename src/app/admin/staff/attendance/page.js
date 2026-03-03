@@ -251,14 +251,15 @@ export default function StaffAttendancePage() {
 
   const exportMonthly = () => {
     const rows = filteredMonthly.map(s => ({
-      'الموظف': s.name,
-      'أيام الحضور': s.days,
-      'أيام العمل في الشهر': monthlySummary.totalWorkDays,
-      'نسبة الحضور': `${Math.round((s.days / monthlySummary.totalWorkDays) * 100)}%`,
-      'إجمالي ساعات العمل': fmtDuration(s.totalMins),
-      'متوسط يومي': fmtDuration(s.days > 0 ? Math.round(s.totalMins / s.days) : 0),
-      'مرات التأخير': s.late,
-      'انصراف تلقائي': s.autoOut,
+      'الموظف':              s.name,
+      'أيام الحضور':         s.days,
+      'أيام الغياب':         s.absent,
+      'أيام العمل المجدولة': s.expectedDays,
+      'نسبة الحضور':         `${s.expectedDays > 0 ? Math.round((s.days / s.expectedDays) * 100) : 0}%`,
+      'إجمالي ساعات العمل':  fmtDuration(s.totalMins),
+      'متوسط يومي':          fmtDuration(s.days > 0 ? Math.round(s.totalMins / s.days) : 0),
+      'مرات التأخير':        s.late,
+      'انصراف تلقائي':       s.autoOut,
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'التقرير الشهري');
