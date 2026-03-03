@@ -108,17 +108,26 @@ export default function StaffAttendancePage() {
   // ── Monthly Summary (grouped by staff) ──
   const monthlySummary = useMemo(() => {
     const [year, month] = selectedMonth.split('-');
+    const today = new Date();
+    const isCurrentMonth =
+      today.getFullYear() === parseInt(year) &&
+      today.getMonth() + 1 === parseInt(month);
+
+    // لو الشهر الحالي → نحسب بس على الأيام اللي فاتت (لحد امبارح)
+    // لو شهر سابق → نحسب كل الشهر
+    const countUntil = isCurrentMonth
+      ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) // لحد انهارده
+      : new Date(year, month, 0); // آخر يوم في الشهر
+
     const totalWorkDays = (() => {
-      // احسب أيام العمل في الشهر (الأحد → الخميس = 5 أيام، أو كل الأيام)
-      // هنعمل كل الأيام بدون الجمعة والسبت
       let count = 0;
       const d = new Date(year, month - 1, 1);
-      while (d.getMonth() === parseInt(month) - 1) {
+      while (d <= countUntil && d.getMonth() === parseInt(month) - 1) {
         const day = d.getDay();
         if (day !== 5 && day !== 6) count++; // استثناء الجمعة والسبت
         d.setDate(d.getDate() + 1);
       }
-      return count;
+      return count || 1; // تجنب القسمة على صفر
     })();
 
     const map = {};
@@ -415,7 +424,7 @@ export default function StaffAttendancePage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="font-black text-slate-900 text-base">{s.name}</h3>
-                          <p className="text-[10px] text-slate-400 font-bold">{s.days} يوم حضور من {monthlySummary.totalWorkDays}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">{s.days} يوم حضور من {monthlySummary.totalWorkDays} يوم عمل مضوا</p>
                         </div>
                         <div className={`text-2xl font-black text-${rateColor}-600`}>{rate}%</div>
                       </div>
