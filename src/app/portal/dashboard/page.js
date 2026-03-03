@@ -892,7 +892,9 @@ export default function StudentDashboard() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-lg md:text-2xl font-black text-gray-800 truncate">أ/ {centerSettings.name}</h1>
+                <h1 className="text-lg md:text-2xl font-black text-gray-800 truncate">
+                  {centerSettings.center_type === 'instructor' ? `أ/ ${centerSettings.name}` : centerSettings.name}
+                </h1>
                 <p className="text-[10px] md:text-sm text-gray-400 font-bold">{centerSettings.description}</p>
               </div>
             </div>

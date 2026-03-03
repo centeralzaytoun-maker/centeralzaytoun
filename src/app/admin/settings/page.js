@@ -247,17 +247,18 @@ export default function SettingsPage() {
       return;
     }
 
-    // 2️⃣ مزامنة اسم السنتر في جدول centers (كان بيترك قديم)
-    // center_settings.center_name هو الاسم الظاهر للمستخدم
-    // centers.name هو اسم السنتر في قاعدة البيانات — لازم يتطابقوا
-    if (settings.center_name) {
-      const { error: centerNameError } = await supabaseBrowser
+    // 2️⃣ مزامنة اسم السنتر + وضع الهوية في جدول centers
+    if (settings.center_name || centerType) {
+      const { error: centerUpdateError } = await supabaseBrowser
         .from('centers')
-        .update({ name: settings.center_name })
+        .update({
+          ...(settings.center_name ? { name: settings.center_name } : {}),
+          center_type: centerType
+        })
         .eq('id', center_id);
 
-      if (centerNameError) {
-        console.warn('⚠️ تم حفظ الإعدادات لكن فشل تحديث اسم السنتر:', centerNameError.message);
+      if (centerUpdateError) {
+        console.warn('⚠️ تم حفظ الإعدادات لكن فشل تحديث بيانات السنتر:', centerUpdateError.message);
       }
     }
 
@@ -671,16 +672,16 @@ export default function SettingsPage() {
               <p className="text-[11px] text-slate-400 font-bold">كيف يتعامل النظام مع هذا الحساب؟</p>
             </div>
           </div>
-          {/* Toggle */}
+          {/* Toggle — Read Only (يتحكم فيه السوبر أدمن فقط) */}
           <div className="flex items-center gap-2">
             <div className={`px-5 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 shadow-sm border ${
-              centerType === 'instructor' 
-                ? 'bg-violet-50 text-violet-700 border-violet-100' 
+              centerType === 'instructor'
+                ? 'bg-violet-50 text-violet-700 border-violet-100'
                 : 'bg-blue-50 text-blue-700 border-blue-100'
             }`}>
-              {centerType === 'instructor' ? '👨‍🏫 حساب مدرس' : '🏫 حساب سنتر عام'}
+              {centerType === 'instructor' ? '👨‍🏫 وضع المدرس' : '🏫 وضع السنتر العام'}
             </div>
-            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 border border-slate-100" title="يتم التحكم في هذا الإعداد من قبل الإدارة فقط">
+            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 border border-slate-100" title="يتم التحكم في هذا الإعداد من قبل الإدارة العليا فقط">
               <FaLock size={12} />
             </div>
           </div>
