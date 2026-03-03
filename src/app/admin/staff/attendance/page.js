@@ -63,6 +63,9 @@ export default function StaffAttendancePage() {
   const [editReason, setEditReason]   = useState('');
   const [editLoading, setEditLoading] = useState(false);
 
+  // جداول الموظفين الأسبوعية (staff_id => day_of_week[])
+  const [staffSchedules, setStaffSchedules] = useState({});
+
   // ── Fetch ──
   useEffect(() => { if (centerId && viewMode === 'daily') fetchDaily(); }, [centerId, dailyDate, viewMode]);
   useEffect(() => { if (centerId && viewMode === 'monthly') fetchMonthly(); }, [centerId, selectedMonth, viewMode]);
@@ -82,14 +85,33 @@ export default function StaffAttendancePage() {
     setMonthlyLoading(true);
     const [year, month] = selectedMonth.split('-');
     const firstDay = `${year}-${month}-01`;
-    const lastDay  = new Date(year, month, 0).toISOString().split('T')[0]; // آخر يوم في الشهر
-    const { data, error } = await supabase
-      .from('staff_attendance').select('*')
-      .eq('center_id', centerId)
-      .gte('date', firstDay).lte('date', lastDay)
-      .order('date', { ascending: true });
-    if (!error) setMonthlyRecords(data || []);
+    const lastDay  = new Date(year, month, 0).toISOString().split('T')[0];
+
+    // جلب سجلات الحضور + جداول الموظفين بالتوازي
+    const [attRes, schedRes] = await Promise.all([
+      supabase
+        .from('staff_attendance').select('*')
+        .eq('center_id', centerId)
+        .gte('date', firstDay).lte('date', lastDay)
+        .order('date', { ascending: true }),
+      supabase
+        .from('staff_schedules').select('*')
+        .eq('center_id', centerId)
+    ]);
+
+    if (!attRes.error) setMonthlyRecords(attRes.data || []);
     else toast.error('خطأ في جلب البيانات');
+
+    // تحويل الجداول إلى ماب { staff_id -> { day_of_week -> scheduleRow } }
+    if (!schedRes.error && schedRes.data) {
+      const map = {};
+      schedRes.data.forEach(row => {
+        if (!map[row.staff_id]) map[row.staff_id] = {};
+        map[row.staff_id][row.day_of_week] = row;
+      });
+      setStaffSchedules(map);
+    }
+
     setMonthlyLoading(false);
   };
 
@@ -105,6 +127,26 @@ export default function StaffAttendancePage() {
     return dailyRecords.filter(r => r.staff_name === selectedStaff);
   }, [dailyRecords, selectedStaff]);
 
+  // حساب عدد أيام العمل المنصرمة لموظف بعينه (حسب جدوله)
+  const calcExpectedDays = (staffId, year, month, countUntil) => {
+    const sched = staffSchedules[staffId]; // { 0: row, 1: row, ... } أو undefined
+    let count = 0;
+    const d = new Date(year, month - 1, 1);
+    while (d <= countUntil && d.getMonth() === parseInt(month) - 1) {
+      const dow = d.getDay();
+      if (sched) {
+        // لو في جدول مخصص → اعتمد عليه
+        const dayRow = sched[dow];
+        if (dayRow && !dayRow.is_day_off) count++;
+      } else {
+        // لا يوجد جدول → افتراضي: كل الأيام ما عدا الجمعة والسبت
+        if (dow !== 5 && dow !== 6) count++;
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    return count || 1;
+  };
+
   // ── Monthly Summary (grouped by staff) ──
   const monthlySummary = useMemo(() => {
     const [year, month] = selectedMonth.split('-');
@@ -113,48 +155,49 @@ export default function StaffAttendancePage() {
       today.getFullYear() === parseInt(year) &&
       today.getMonth() + 1 === parseInt(month);
 
-    // لو الشهر الحالي → نحسب بس على الأيام اللي فاتت (لحد امبارح)
-    // لو شهر سابق → نحسب كل الشهر
     const countUntil = isCurrentMonth
-      ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) // لحد انهارده
-      : new Date(year, month, 0); // آخر يوم في الشهر
+      ? new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      : new Date(year, month, 0);
 
-    const totalWorkDays = (() => {
-      let count = 0;
-      const d = new Date(year, month - 1, 1);
-      while (d <= countUntil && d.getMonth() === parseInt(month) - 1) {
-        const day = d.getDay();
-        if (day !== 5 && day !== 6) count++; // استثناء الجمعة والسبت
-        d.setDate(d.getDate() + 1);
-      }
-      return count || 1; // تجنب القسمة على صفر
-    })();
-
+    // جمع سجلات الحضور حسب الإسم والمعرف باللو جلبنا staff_id
     const map = {};
     monthlyRecords.forEach(r => {
       if (!r.staff_name) return;
-      if (!map[r.staff_name]) {
-        map[r.staff_name] = {
-          name: r.staff_name,
-          days: 0,
+      const key = r.staff_id || r.staff_name;
+      if (!map[key]) {
+        map[key] = {
+          staffId:   r.staff_id,
+          name:      r.staff_name,
+          days:      0,
+          absent:    0,
           totalMins: 0,
-          late: 0,
-          autoOut: 0,
-          modified: 0,
-          records: []
+          late:      0,
+          autoOut:   0,
+          modified:  0,
+          records:   []
         };
       }
-      const s = map[r.staff_name];
+      const s = map[key];
       if (r.check_in) s.days++;
       if (r.duration_minutes) s.totalMins += r.duration_minutes;
-      if (r.status === 'late') s.late++;
+      if (r.status === 'late')     s.late++;
       if (r.status === 'auto_out') s.autoOut++;
-      if (r.is_modified) s.modified++;
+      if (r.is_modified)           s.modified++;
       s.records.push(r);
     });
 
-    return { summary: Object.values(map), totalWorkDays };
-  }, [monthlyRecords, selectedMonth]);
+    // حساب الغياب لكل موظف حسب جدوله الخاص
+    const summary = Object.values(map).map(s => {
+      const expectedDays = calcExpectedDays(s.staffId, year, month, countUntil);
+      return {
+        ...s,
+        expectedDays,
+        absent: Math.max(0, expectedDays - s.days),
+      };
+    });
+
+    return { summary };
+  }, [monthlyRecords, selectedMonth, staffSchedules]);
 
   const filteredMonthly = useMemo(() => {
     if (!selectedStaff) return monthlySummary.summary;
@@ -383,9 +426,9 @@ export default function StaffAttendancePage() {
             {/* Month Stats */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'أيام العمل في الشهر', value: monthlySummary.totalWorkDays, icon: <FaCalendarAlt />, c: 'slate' },
                 { label: 'إجمالي موظفين', value: monthlySummary.summary.length, icon: <FaUsers />, c: 'blue' },
                 { label: 'إجمالي سجلات', value: monthlyRecords.length, icon: <FaClock />, c: 'violet' },
+                { label: 'إجمالي غيابات', value: monthlySummary.summary.reduce((s,r)=>s+r.absent,0), icon: <FaCalendarAlt />, c: 'red' },
                 { label: 'سجلات معدّلة', value: monthlyRecords.filter(r=>r.is_modified).length, icon: <FaEdit />, c: 'amber' },
               ].map(s => (
                 <div key={s.label} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4">
@@ -411,8 +454,8 @@ export default function StaffAttendancePage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {filteredMonthly.map(s => {
-                  const rate = monthlySummary.totalWorkDays > 0 ? Math.round((s.days / monthlySummary.totalWorkDays) * 100) : 0;
+                  {filteredMonthly.map(s => {
+                  const rate = s.expectedDays > 0 ? Math.round((s.days / s.expectedDays) * 100) : 0;
                   const avgMins = s.days > 0 ? Math.round(s.totalMins / s.days) : 0;
                   const rateColor = rate >= 90 ? 'emerald' : rate >= 70 ? 'amber' : 'red';
                   return (
@@ -424,7 +467,7 @@ export default function StaffAttendancePage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="font-black text-slate-900 text-base">{s.name}</h3>
-                          <p className="text-[10px] text-slate-400 font-bold">{s.days} يوم حضور من {monthlySummary.totalWorkDays} يوم عمل مضوا</p>
+                          <p className="text-[10px] text-slate-400 font-bold">{s.days} حضور · {s.absent} غياب · من {s.expectedDays} يوم عمل</p>
                         </div>
                         <div className={`text-2xl font-black text-${rateColor}-600`}>{rate}%</div>
                       </div>
@@ -436,10 +479,7 @@ export default function StaffAttendancePage() {
                           <span className={`text-${rateColor}-600`}>{rate}%</span>
                         </div>
                         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full bg-${rateColor}-500 transition-all duration-700`}
-                            style={{ width: `${rate}%` }}
-                          />
+                          <div className={`h-full rounded-full bg-${rateColor}-500 transition-all duration-700`} style={{ width: `${rate}%` }} />
                         </div>
                       </div>
 
@@ -448,8 +488,8 @@ export default function StaffAttendancePage() {
                         {[
                           { label: 'إجمالي ساعات', value: fmtDuration(s.totalMins), color: 'bg-blue-50 text-blue-700' },
                           { label: 'متوسط يومي', value: fmtDuration(avgMins), color: 'bg-violet-50 text-violet-700' },
-                          { label: 'مرات التأخير', value: s.late, color: 'bg-amber-50 text-amber-700' },
-                          { label: 'انصراف تلقائي', value: s.autoOut, color: 'bg-red-50 text-red-700' },
+                          { label: 'أيام الغياب', value: s.absent, color: s.absent > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700' },
+                          { label: 'مرات التأخير', value: s.late, color: s.late > 0 ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-500' },
                         ].map(item => (
                           <div key={item.label} className={`${item.color} rounded-2xl p-3`}>
                             <p className="text-[8px] font-black uppercase opacity-60 mb-1">{item.label}</p>
