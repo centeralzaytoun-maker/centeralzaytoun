@@ -744,7 +744,8 @@ export default function StaffDashboard() {
         )}
       </div>
 
-      {/* ── ATTENDANCE CARD ── */}
+      {/* ── ATTENDANCE CARD — يظهر فقط لو الباقة تدعم الحضور ── */}
+      {allowedFeatures?.includes('page_staff_attendance') && (
       <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-100">
         <div className="flex flex-col lg:flex-row items-center gap-6">
           {/* Info */}
@@ -812,6 +813,7 @@ export default function StaffDashboard() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ── TIMELINE ── */}
       <div className="bg-white rounded-[2.5rem] p-6 md:p-10 shadow-sm border border-slate-100">
