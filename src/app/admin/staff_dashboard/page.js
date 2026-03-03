@@ -187,37 +187,45 @@ export default function StaffDashboard() {
     );
   });
 
-  // ✅ تسجيل الحضور (مع GPS + Device + كشف التأخير)
+  // ✅ تسجيل الحضور (مع GPS + Device + كشف التأخير حسب الجدول الأسبوعي)
   const handleCheckIn = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     setAttendanceLoading(true);
 
     const { lat, lng } = await getGeoLocation();
-    const deviceInfo = navigator.userAgent.substring(0, 120);
-    const todayDate  = new Date().toISOString().split('T')[0];
-    const now        = new Date();
+    const deviceInfo  = navigator.userAgent.substring(0, 120);
+    const todayDate   = new Date().toISOString().split('T')[0];
+    const now         = new Date();
+    const todayDayOfWeek = now.getDay(); // 0=الأحد ... 6=السبت
 
-    // 1️⃣ جلب الوقت المتوقع لهذا الموظف
+    // 1️⃣ جلب جدول اليوم الحالي من staff_schedules
     let attendanceStatus = 'present';
     let lateNote = '';
 
-    const { data: profileData } = await supabase
-      .from('staff_profiles')
-      .select('expected_check_in, late_tolerance_min')
-      .eq('id', session.user.id)
+    const { data: todaySchedule } = await supabase
+      .from('staff_schedules')
+      .select('*')
+      .eq('center_id', centerId)
+      .eq('staff_id', session.user.id)
+      .eq('day_of_week', todayDayOfWeek)
       .maybeSingle();
 
-    if (profileData?.expected_check_in) {
-      const [expH, expM] = profileData.expected_check_in.split(':').map(Number);
-      const tolerance    = profileData.late_tolerance_min || 15;
-      const expectedTime = new Date(now);
-      expectedTime.setHours(expH, expM, 0, 0);
-      const deadlineTime = new Date(expectedTime.getTime() + tolerance * 60000);
-      if (now > deadlineTime) {
-        const lateMinutes = Math.floor((now - expectedTime) / 60000);
-        attendanceStatus = 'late';
-        lateNote = `\n⚠️ تأخرت ${lateMinutes} دقيقة عن الوقت المحدد (${profileData.expected_check_in.slice(0,5)})`;
+    if (todaySchedule) {
+      if (todaySchedule.is_day_off) {
+        // يوم إجازة — نبلغه بس نسمحله يدخل
+        lateNote = '\n🏖️ ملحوظة: انهاردة ليس يوم عملك المجدول';
+      } else if (todaySchedule.expected_check_in) {
+        const [expH, expM] = todaySchedule.expected_check_in.split(':').map(Number);
+        const tolerance    = todaySchedule.late_tolerance_min || 15;
+        const expectedTime = new Date(now);
+        expectedTime.setHours(expH, expM, 0, 0);
+        const deadlineTime = new Date(expectedTime.getTime() + tolerance * 60000);
+        if (now > deadlineTime) {
+          const lateMinutes = Math.floor((now - expectedTime) / 60000);
+          attendanceStatus = 'late';
+          lateNote = `\n⚠️ تأخرت ${lateMinutes} دقيقة عن الوقت المحدد (${todaySchedule.expected_check_in.slice(0,5)})`;
+        }
       }
     }
 

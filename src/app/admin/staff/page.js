@@ -2,7 +2,29 @@
 import { useState, useEffect } from 'react';
 import { supabaseBrowser } from '../../../lib/supabase';
 import { useAuth } from '../../../context/AuthContext';
-import { FaUserPlus, FaTrash, FaUserShield, FaUserTie, FaSpinner, FaTimes, FaClock, FaCheck } from 'react-icons/fa';
+import {
+  FaUserPlus, FaTrash, FaUserShield, FaUserTie,
+  FaSpinner, FaTimes, FaCheck, FaCalendarAlt
+} from 'react-icons/fa';
+
+// ── أسماء الأيام بالعربي ──
+const DAYS = [
+  { id: 0, label: 'الأحد',     short: 'أ' },
+  { id: 1, label: 'الاثنين',   short: 'ا' },
+  { id: 2, label: 'الثلاثاء',  short: 'ث' },
+  { id: 3, label: 'الأربعاء',  short: 'ر' },
+  { id: 4, label: 'الخميس',    short: 'خ' },
+  { id: 5, label: 'الجمعة',    short: 'ج' },
+  { id: 6, label: 'السبت',     short: 'س' },
+];
+
+// الوقت الافتراضي لكل يوم
+const defaultDaySchedule = (dayId) => ({
+  day_of_week: dayId,
+  expected_check_in: '09:00',
+  late_tolerance_min: 15,
+  is_day_off: dayId === 5 || dayId === 6, // جمعة وسبت = إجازة افتراضية
+});
 
 export default function StaffPage() {
   const { centerId, user } = useAuth();
@@ -10,12 +32,13 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
-
-  // بيانات الفورم
   const [formData, setFormData] = useState({ fullName: '', email: '', password: '', role: 'staff' });
 
-  // تعديل وقت الحضور المتوقع
-  const [editingTime, setEditingTime] = useState(null); // { id, time, tolerance }
+  // ── حالة Modal الجدول الأسبوعي ──
+  const [scheduleModal, setScheduleModal] = useState(null); // { staffId, staffName }
+  const [schedule, setSchedule] = useState([]); // 7 أيام
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   useEffect(() => { if (centerId) fetchStaff(); }, [centerId]);
 
@@ -23,16 +46,76 @@ export default function StaffPage() {
     if (!centerId) return;
     try {
       const { data, error } = await supabaseBrowser
-        .from('staff_profiles')
-        .select('*')
-        .eq('center_id', centerId)
-        .order('created_at', { ascending: false });
+        .from('staff_profiles').select('*')
+        .eq('center_id', centerId).order('created_at', { ascending: false });
       if (error) throw error;
       setStaff(data);
-    } catch (error) {
-      console.error('Error fetching staff:', error);
+    } catch (e) {
+      console.error('Error fetching staff:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── فتح Modal الجدول ──
+  const openScheduleModal = async (member) => {
+    setScheduleModal({ staffId: member.id, staffName: member.full_name });
+    setScheduleLoading(true);
+
+    // جلب الجدول الحالي
+    const { data } = await supabaseBrowser
+      .from('staff_schedules')
+      .select('*')
+      .eq('center_id', centerId)
+      .eq('staff_id', member.id)
+      .order('day_of_week');
+
+    // دمج البيانات الموجودة مع الـ 7 أيام
+    const merged = DAYS.map(day => {
+      const existing = data?.find(r => r.day_of_week === day.id);
+      return existing || defaultDaySchedule(day.id);
+    });
+    setSchedule(merged);
+    setScheduleLoading(false);
+  };
+
+  // ── تعديل يوم في الجدول ──
+  const updateDay = (dayId, field, value) => {
+    setSchedule(prev => prev.map(d =>
+      d.day_of_week === dayId ? { ...d, [field]: value } : d
+    ));
+  };
+
+  // ── حفظ الجدول ──
+  const saveSchedule = async () => {
+    if (!scheduleModal) return;
+    setSavingSchedule(true);
+    try {
+      // حذف الجدول القديم وإعادة إنشائه
+      await supabaseBrowser
+        .from('staff_schedules')
+        .delete()
+        .eq('center_id', centerId)
+        .eq('staff_id', scheduleModal.staffId);
+
+      const rows = schedule.map(d => ({
+        center_id:          centerId,
+        staff_id:           scheduleModal.staffId,
+        day_of_week:        d.day_of_week,
+        expected_check_in:  d.is_day_off ? null : d.expected_check_in,
+        late_tolerance_min: d.late_tolerance_min,
+        is_day_off:         d.is_day_off,
+      }));
+
+      const { error } = await supabaseBrowser.from('staff_schedules').insert(rows);
+      if (error) throw error;
+
+      alert(`✅ تم حفظ جدول ${scheduleModal.staffName} بنجاح`);
+      setScheduleModal(null);
+    } catch (e) {
+      alert('❌ خطأ أثناء الحفظ: ' + e.message);
+    } finally {
+      setSavingSchedule(false);
     }
   };
 
@@ -82,30 +165,6 @@ export default function StaffPage() {
     }
   };
 
-  // ── تحديث وقت الحضور المتوقع ──
-  const handleUpdateCheckInTime = async (staffId) => {
-    if (!editingTime) return;
-    try {
-      const { error } = await supabaseBrowser
-        .from('staff_profiles')
-        .update({
-          expected_check_in:  editingTime.time,
-          late_tolerance_min: parseInt(editingTime.tolerance) || 15
-        })
-        .eq('id', staffId);
-      if (error) throw error;
-      setStaff(prev => prev.map(s =>
-        s.id === staffId
-          ? { ...s, expected_check_in: editingTime.time, late_tolerance_min: parseInt(editingTime.tolerance) }
-          : s
-      ));
-      setEditingTime(null);
-      alert('✅ تم حفظ وقت الحضور بنجاح');
-    } catch (e) {
-      alert('❌ خطأ أثناء الحفظ: ' + e.message);
-    }
-  };
-
   return (
     <div className="space-y-4 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 p-2 md:p-0 pb-24 md:pb-10">
 
@@ -118,12 +177,10 @@ export default function StaffPage() {
             </div>
             إدارة الموظفين
           </h1>
-          <p className="text-gray-400 text-[10px] md:text-xs font-bold mt-2 leading-relaxed">يمكنك إضافة سكرتارية، مدرسين، أو مسؤولين للنظام والتحكم في صلاحياتهم</p>
+          <p className="text-gray-400 text-[10px] md:text-xs font-bold mt-2">يمكنك إضافة سكرتارية، مدرسين، أو مسؤولين للنظام والتحكم في صلاحياتهم</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="w-full md:w-auto bg-gray-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-gray-200 hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-3 active:scale-95 text-sm md:text-base"
-        >
+        <button onClick={() => setIsModalOpen(true)}
+          className="w-full md:w-auto bg-gray-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-gray-200 hover:bg-black hover:scale-105 transition-all flex items-center justify-center gap-3 active:scale-95">
           <FaUserPlus /> موظف جديد
         </button>
       </div>
@@ -145,126 +202,54 @@ export default function StaffPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 px-2 md:px-0">
           {staff.map((member) => (
-            <div key={member.id} className="bg-white p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-blue-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden flex flex-col">
+            <div key={member.id} className="bg-white p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-blue-300 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col">
 
               {/* Badge + Delete */}
               <div className="flex justify-between items-start mb-6">
-                <div className={`px-3 py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider shadow-sm border ${
+                <div className={`px-3 py-1.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider border ${
                   member.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'
                 }`}>
                   {member.role === 'admin' ? 'مدير عام' : 'موظف / سكرتارية'}
                 </div>
-                <button
-                  onClick={() => handleDelete(member.id)}
-                  className="w-8 h-8 bg-red-50 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm group-hover:scale-110 active:scale-90"
-                  title="حذف الموظف"
-                >
+                <button onClick={() => handleDelete(member.id)}
+                  className="w-8 h-8 bg-red-50 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
                   <FaTrash size={12} />
                 </button>
               </div>
 
-              {/* Name */}
+              {/* Avatar + Name */}
               <div className="flex items-center gap-4 mb-2">
-                <div className={`w-14 h-14 md:w-16 md:h-16 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-xl md:text-2xl shadow-inner shrink-0 ${
+                <div className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-2xl shadow-inner shrink-0 ${
                   member.role === 'admin' ? 'bg-purple-100/50 text-purple-600' : 'bg-blue-100/50 text-blue-600'
                 }`}>
                   {member.role === 'admin' ? <FaUserShield /> : <FaUserTie />}
                 </div>
                 <div className="overflow-hidden">
-                  <h3 className="font-black text-gray-800 text-sm md:text-lg truncate leading-tight">{member.full_name}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold opacity-70 mt-1 uppercase tracking-tighter">ID: {member.id.split('-')[0]}</p>
+                  <h3 className="font-black text-gray-800 text-sm md:text-base truncate">{member.full_name}</h3>
+                  <p className="text-[9px] text-gray-400 font-bold opacity-70 mt-0.5 uppercase">ID: {member.id.split('-')[0]}</p>
                 </div>
               </div>
 
-              {/* Bottom Section */}
+              {/* Bottom */}
               <div className="mt-auto pt-5 space-y-3">
 
-                {/* ── وقت الحضور المتوقع ── */}
-                {editingTime?.id === member.id ? (
-                  // حالة التعديل
-                  <div className="bg-blue-50 rounded-2xl p-3 border border-blue-100 space-y-3">
-                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
-                      <FaClock size={9} /> تعديل وقت الحضور
-                    </p>
-
-                    {/* وقت الحضور */}
+                {/* زر الجدول الأسبوعي */}
+                <button
+                  onClick={() => openScheduleModal(member)}
+                  className="w-full bg-gradient-to-l from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border border-blue-100 rounded-2xl p-3.5 text-right transition-all group"
+                >
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[9px] text-slate-400 font-bold mb-1">الوقت المتوقع</p>
-                      <input
-                        type="time"
-                        value={editingTime.time}
-                        onChange={e => setEditingTime(prev => ({ ...prev, time: e.target.value }))}
-                        className="w-full h-10 px-3 bg-white rounded-xl text-sm font-black border-2 border-blue-200 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-
-                    {/* هامش التسامح */}
-                    <div>
-                      <p className="text-[9px] text-slate-400 font-bold mb-1">هامش التسامح (دقائق)</p>
-                      <div className="grid grid-cols-5 gap-1">
-                        {[5, 10, 15, 20, 30].map(m => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setEditingTime(prev => ({ ...prev, tolerance: m }))}
-                            className={`h-8 rounded-xl text-[10px] font-black transition-all ${
-                              parseInt(editingTime.tolerance) === m
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-white text-slate-500 border border-slate-200 hover:border-blue-300'
-                            }`}
-                          >
-                            {m}د
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* أزرار الحفظ والإلغاء */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleUpdateCheckInTime(member.id)}
-                        className="flex-1 h-10 bg-blue-600 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 hover:bg-blue-700 transition-all"
-                      >
-                        <FaCheck size={10} /> حفظ
-                      </button>
-                      <button
-                        onClick={() => setEditingTime(null)}
-                        className="flex-1 h-10 bg-white text-slate-500 rounded-xl text-xs font-black border border-slate-200 hover:bg-slate-50 transition-all"
-                      >
-                        إلغاء
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  // حالة العرض العادية
-                  <button
-                    onClick={() => setEditingTime({
-                      id: member.id,
-                      time: member.expected_check_in?.slice(0, 5) || '09:00',
-                      tolerance: member.late_tolerance_min || 15
-                    })}
-                    className="w-full bg-gray-50 rounded-2xl p-3 border border-gray-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all text-right group/t"
-                  >
-                    <p className="text-[9px] text-gray-400 font-bold flex items-center gap-1.5">
-                      <FaClock size={9} className="text-blue-400" />
-                      وقت الحضور المتوقع
-                    </p>
-                    {member.expected_check_in ? (
-                      <div className="flex items-center justify-between mt-1">
-                        <p className="text-sm font-black text-gray-800">
-                          {new Date(`2000-01-01T${member.expected_check_in}`).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-black">
-                          ± {member.late_tolerance_min || 15}د
-                        </span>
-                      </div>
-                    ) : (
-                      <p className="text-xs font-black text-blue-500 mt-1 group-hover/t:underline">
-                        اضغط لتحديد وقت الحضور ←
+                      <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <FaCalendarAlt size={8} /> الجدول الأسبوعي
                       </p>
-                    )}
-                  </button>
-                )}
+                      <p className="text-xs font-black text-slate-700 mt-1">
+                        اضغط لإعداد أيام ومواعيد الحضور
+                      </p>
+                    </div>
+                    <span className="text-blue-400 text-lg group-hover:translate-x-[-2px] transition-transform">←</span>
+                  </div>
+                </button>
 
                 {/* تاريخ الانضمام */}
                 <div className="bg-gray-50/50 rounded-2xl p-3 border border-gray-100/50">
@@ -279,80 +264,170 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* Modal إضافة موظف */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[5000] flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="bg-white w-full max-w-md p-6 md:p-10 rounded-t-[2.5rem] md:rounded-[3rem] shadow-2xl animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto custom-scrollbar">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-xl md:text-2xl font-black text-gray-800 flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                  <FaUserPlus />
-                </div>
-                تسجيل موظف
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
-              >
+      {/* ══════════════════════════════════════════
+          Modal الجدول الأسبوعي
+      ══════════════════════════════════════════ */}
+      {scheduleModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[5000] flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl">
+          <div className="bg-white w-full max-w-lg rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 max-h-[95vh] flex flex-col">
+
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 md:p-8 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Weekly Schedule</p>
+                <h2 className="text-xl font-black text-slate-900">الجدول الأسبوعي</h2>
+                <p className="text-xs text-slate-400 font-bold mt-0.5">{scheduleModal.staffName}</p>
+              </div>
+              <button onClick={() => setScheduleModal(null)}
+                className="w-10 h-10 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:bg-slate-100 transition-all">
                 <FaTimes />
               </button>
             </div>
 
+            {/* Days List */}
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-3">
+              {scheduleLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <FaSpinner className="animate-spin text-blue-500 text-2xl" />
+                </div>
+              ) : schedule.map((day) => {
+                const dayInfo = DAYS.find(d => d.id === day.day_of_week);
+                return (
+                  <div key={day.day_of_week}
+                    className={`rounded-2xl border p-4 transition-all ${
+                      day.is_day_off
+                        ? 'bg-slate-50 border-slate-100 opacity-60'
+                        : 'bg-white border-slate-200 shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* اسم اليوم */}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 ${
+                        day.is_day_off ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                      }`}>
+                        {dayInfo?.short}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`font-black text-sm ${day.is_day_off ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                          {dayInfo?.label}
+                        </p>
+                        {!day.is_day_off && (
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            {/* وقت الدخول */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-slate-400 font-black">دخول:</span>
+                              <input
+                                type="time"
+                                value={day.expected_check_in || '09:00'}
+                                onChange={e => updateDay(day.day_of_week, 'expected_check_in', e.target.value)}
+                                className="h-8 px-2 bg-slate-50 rounded-xl text-xs font-black border border-slate-200 focus:border-blue-500 outline-none w-28"
+                              />
+                            </div>
+                            {/* هامش التسامح */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-slate-400 font-black">±</span>
+                              <select
+                                value={day.late_tolerance_min}
+                                onChange={e => updateDay(day.day_of_week, 'late_tolerance_min', parseInt(e.target.value))}
+                                className="h-8 px-2 bg-slate-50 rounded-xl text-xs font-black border border-slate-200 outline-none"
+                              >
+                                {[5, 10, 15, 20, 30].map(m => <option key={m} value={m}>{m}د</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Toggle إجازة */}
+                      <button
+                        onClick={() => updateDay(day.day_of_week, 'is_day_off', !day.is_day_off)}
+                        className={`px-3 h-8 rounded-xl text-[10px] font-black transition-all flex-shrink-0 ${
+                          day.is_day_off
+                            ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {day.is_day_off ? '🏖️ إجازة' : 'عمل'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 md:p-8 border-t border-slate-100 flex gap-3 flex-shrink-0">
+              <button onClick={saveSchedule} disabled={savingSchedule}
+                className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-black transition-all active:scale-95 disabled:opacity-50 shadow-xl">
+                {savingSchedule ? <FaSpinner className="animate-spin" /> : <><FaCheck /> حفظ الجدول</>}
+              </button>
+              <button onClick={() => setScheduleModal(null)}
+                className="flex-1 h-14 bg-slate-100 text-slate-500 rounded-2xl font-black hover:bg-slate-200 transition-all">
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          Modal إضافة موظف
+      ══════════════════════════════════════════ */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[5000] flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white w-full max-w-md p-6 md:p-10 rounded-t-[2.5rem] md:rounded-[3rem] shadow-2xl animate-in slide-in-from-bottom-10 md:zoom-in-95 duration-300 max-h-[95vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl md:text-2xl font-black text-gray-800 flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><FaUserPlus /></div>
+                تسجيل موظف
+              </h2>
+              <button onClick={() => setIsModalOpen(false)}
+                className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center hover:bg-gray-100">
+                <FaTimes />
+              </button>
+            </div>
             <form onSubmit={handleCreateUser} className="space-y-6">
+              {[
+                { label: 'الاسم بالكامل', type: 'text', key: 'fullName', placeholder: 'مثال: أحمد محمد' },
+                { label: 'البريد الإلكتروني (للدخول)', type: 'email', key: 'email', placeholder: 'employee@smart.com' },
+                { label: 'كلمة المرور', type: 'text', key: 'password', placeholder: 'يفضل كلمة مرور قوية' },
+              ].map(f => (
+                <div key={f.key} className="space-y-2">
+                  <label className="text-[11px] font-black text-gray-400 block uppercase tracking-wider">{f.label}</label>
+                  <input type={f.type} required={f.key !== 'password'} minLength={f.key === 'password' ? 6 : undefined}
+                    className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none shadow-sm placeholder:text-gray-400"
+                    placeholder={f.placeholder}
+                    value={formData[f.key]}
+                    onChange={e => setFormData({...formData, [f.key]: e.target.value})}
+                  />
+                </div>
+              ))}
               <div className="space-y-2">
-                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">الاسم بالكامل</label>
-                <input required
-                  className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
-                  placeholder="مثال: أحمد محمد"
-                  value={formData.fullName}
-                  onChange={e => setFormData({...formData, fullName: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">البريد الإلكتروني (للدخول)</label>
-                <input type="email" required
-                  className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
-                  placeholder="employee@smart.com"
-                  value={formData.email}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">كلمة المرور</label>
-                <input type="text" required minLength={6}
-                  className="w-full h-14 px-5 bg-white rounded-2xl font-black text-sm border-2 border-gray-100 focus:border-blue-500 outline-none transition-all shadow-sm text-gray-900 placeholder:text-gray-400"
-                  placeholder="يفضل كلمة مرور قوية"
-                  value={formData.password}
-                  onChange={e => setFormData({...formData, password: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] md:text-[11px] font-black text-gray-400 block uppercase tracking-wider mr-1">صلاحية الوصول</label>
+                <label className="text-[11px] font-black text-gray-400 block uppercase tracking-wider">صلاحية الوصول</label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setFormData({...formData, role: 'staff'})}
-                    className={`h-14 rounded-2xl font-black text-[10px] md:text-xs border-2 transition-all shadow-sm flex flex-col items-center justify-center leading-tight ${
-                      formData.role === 'staff' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-50 bg-gray-50 text-gray-400'
-                    }`}>
-                    <span>موظف</span>
-                    <span className="opacity-50 font-bold text-[9px] mt-0.5">سكرتارية / مساعد</span>
-                  </button>
-                  <button type="button" onClick={() => setFormData({...formData, role: 'admin'})}
-                    className={`h-14 rounded-2xl font-black text-[10px] md:text-xs border-2 transition-all shadow-sm flex flex-col items-center justify-center leading-tight ${
-                      formData.role === 'admin' ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-50 bg-gray-50 text-gray-400'
-                    }`}>
-                    <span>مدير عام</span>
-                    <span className="opacity-50 font-bold text-[9px] mt-0.5">Admin Full Access</span>
-                  </button>
+                  {[
+                    { role: 'staff', label: 'موظف', sub: 'سكرتارية / مساعد', color: 'blue' },
+                    { role: 'admin', label: 'مدير عام', sub: 'Admin Full Access', color: 'purple' },
+                  ].map(r => (
+                    <button key={r.role} type="button" onClick={() => setFormData({...formData, role: r.role})}
+                      className={`h-14 rounded-2xl font-black text-xs border-2 transition-all flex flex-col items-center justify-center ${
+                        formData.role === r.role
+                          ? `border-${r.color}-600 bg-${r.color}-50 text-${r.color}-700`
+                          : 'border-gray-100 bg-gray-50 text-gray-400'
+                      }`}>
+                      <span>{r.label}</span>
+                      <span className="opacity-50 font-bold text-[9px] mt-0.5">{r.sub}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-
-              <div className="pt-6 flex flex-col sm:flex-row gap-3">
+              <div className="pt-4 flex flex-col sm:flex-row gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)}
-                  className="w-full bg-gray-100 text-gray-500 h-14 rounded-2xl font-black hover:bg-gray-200 transition-all active:scale-95 order-2 sm:order-1">
+                  className="w-full bg-gray-100 text-gray-500 h-14 rounded-2xl font-black hover:bg-gray-200 transition-all order-2 sm:order-1">
                   إلغاء
                 </button>
                 <button disabled={processing}
-                  className="w-full bg-gray-900 text-white h-14 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl shadow-gray-200 order-1 sm:order-2">
+                  className="w-full bg-gray-900 text-white h-14 rounded-2xl font-black hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95 shadow-xl order-1 sm:order-2">
                   {processing ? <FaSpinner className="animate-spin"/> : <><FaUserPlus /> حفظ الموظف</>}
                 </button>
               </div>
