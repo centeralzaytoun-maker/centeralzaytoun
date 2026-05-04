@@ -76,6 +76,7 @@ export default function SettingsPage() {
 
   // ── Add Stage inputs ──
   const [newStage, setNewStage] = useState('');
+  const [newStagePrefix, setNewStagePrefix] = useState('');
   const [sortOrder, setSortOrder] = useState(1);
 
   // ✅ FIX: Controlled states for Room inputs
@@ -227,8 +228,16 @@ export default function SettingsPage() {
         address: settings.address,
         center_phone: settings.center_phone,
         student_code_prefix: settings.student_code_prefix,
+        next_student_code: settings.next_student_code,
         primary_color: settings.primary_color,
         secondary_color: settings.secondary_color,
+        hero_bg_color: settings.hero_bg_color,
+        logo_url: settings.logo_url,
+        whatsapp_template: settings.whatsapp_template,
+        msg_debt: settings.msg_debt,
+        msg_absent: settings.msg_absent,
+        report_footer: settings.report_footer,
+        debt_limit: settings.debt_limit,
         // 🎭 Instructor Mode fields
         ...instructorFields,
         // 💳 Payment Gateway Fields
@@ -471,6 +480,7 @@ export default function SettingsPage() {
         .insert([{
           name: newStage,
           sort_order: sortOrder,
+          code_prefix: newStagePrefix.trim().toUpperCase() || null,
           center_id: center_id
         }])
         .select();
@@ -480,12 +490,26 @@ export default function SettingsPage() {
       const updatedStages = [...stages, ...data].sort((a, b) => a.sort_order - b.sort_order);
       setStages(updatedStages);
       setNewStage('');
+      setNewStagePrefix('');
       setSortOrder(sortOrder + 1);
       alert('✅ تمت إضافة المرحلة بنجاح');
     } catch (error) {
       alert('حدث خطأ أثناء الإضافة: ' + error.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpdateStagePrefix = async (stageId, prefix) => {
+    try {
+      const { error } = await supabaseBrowser
+        .from('educational_stages')
+        .update({ code_prefix: prefix.trim().toUpperCase() || null })
+        .eq('id', stageId);
+      if (error) throw error;
+      setStages(stages.map(s => s.id === stageId ? { ...s, code_prefix: prefix.trim().toUpperCase() || null } : s));
+    } catch (error) {
+      alert('خطأ أثناء التحديث: ' + error.message);
     }
   };
 
@@ -1229,38 +1253,68 @@ export default function SettingsPage() {
                     className="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-50 focus:border-purple-500 font-black text-sm transition-all text-gray-900 appearance-none opacity-100 placeholder:text-gray-400"
                   />
                </div>
-               <div className="flex flex-col sm:flex-row gap-3">
+               <div className="flex gap-3">
+                  <div className="w-28 relative">
+                     <label className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1 block text-center">بادئة الكود</label>
+                     <input
+                        type="text"
+                        value={newStagePrefix}
+                        onChange={(e) => setNewStagePrefix(e.target.value.slice(0, 5))}
+                        placeholder="مثل: A"
+                        dir="ltr"
+                        className="w-full p-3 bg-white border-2 border-purple-200 rounded-2xl outline-none text-center font-black text-purple-700 focus:border-purple-500 text-sm uppercase tracking-widest"
+                     />
+                  </div>
                   <div className="flex-1 relative">
-                     <FaSortNumericDown className="absolute top-4 right-4 text-purple-300" />
+                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block text-center">الترتيب</label>
+                     <FaSortNumericDown className="absolute bottom-3.5 right-4 text-purple-300" />
                      <input
                         type="number"
                         value={sortOrder}
                         onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-                        className="w-full p-4 pr-12 bg-white border border-slate-200 rounded-2xl outline-none text-center font-black"
+                        className="w-full p-3 pr-10 bg-white border border-slate-200 rounded-2xl outline-none text-center font-black"
                      />
                   </div>
-                  <button
-                    onClick={handleAddStage}
-                    disabled={saving}
-                    className="bg-purple-600 text-white px-8 py-4 rounded-2xl font-black hover:bg-purple-700 transition disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-purple-100"
-                  >
-                    <FaPlus /> إضافة
-                  </button>
+                  <div className="flex items-end">
+                     <button
+                       onClick={handleAddStage}
+                       disabled={saving}
+                       className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black hover:bg-purple-700 transition disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-purple-100"
+                     >
+                       <FaPlus /> إضافة
+                     </button>
+                  </div>
                </div>
             </div>
 
             <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
               {stages.map((stage) => (
-                <div key={stage.id} className="flex items-center justify-between p-4 bg-white border border-slate-50 rounded-2xl hover:border-purple-200 hover:shadow-md transition group">
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center font-black text-xs border border-purple-100">{stage.sort_order}</span>
-                    <span className="font-black text-slate-700 text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px] md:max-w-[200px]">{stage.name}</span>
+                <div key={stage.id} className="flex items-center gap-2 p-3 bg-white border border-slate-100 rounded-2xl hover:border-purple-200 hover:shadow-md transition group">
+                  <span className="w-7 h-7 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center font-black text-xs border border-purple-100 shrink-0">{stage.sort_order}</span>
+                  <span className="font-black text-slate-700 text-sm flex-1 truncate">{stage.name}</span>
+                  {/* بادئة الكود */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="text"
+                      defaultValue={stage.code_prefix || ''}
+                      onBlur={(e) => {
+                        if (e.target.value.toUpperCase() !== (stage.code_prefix || '')) {
+                          handleUpdateStagePrefix(stage.id, e.target.value);
+                        }
+                      }}
+                      placeholder="A"
+                      dir="ltr"
+                      maxLength={5}
+                      title="بادئة كود الطالب لهذا الصف"
+                      className="w-14 p-1.5 text-center bg-purple-50 border border-purple-200 rounded-xl font-black text-purple-700 text-xs uppercase tracking-widest outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                    />
+                    <span className="text-[9px] text-purple-400 font-black hidden sm:block">بادئة</span>
                   </div>
                   <button
                     onClick={() => handleDeleteStage(stage.id)}
-                    className="text-slate-300 hover:text-red-500 p-2 transition-all md:opacity-0 md:group-hover:opacity-100"
+                    className="text-slate-300 hover:text-red-500 p-2 transition-all md:opacity-0 md:group-hover:opacity-100 shrink-0"
                   >
-                    <FaTrash size={14} />
+                    <FaTrash size={13} />
                   </button>
                 </div>
               ))}

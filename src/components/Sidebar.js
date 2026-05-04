@@ -75,87 +75,45 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
   const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
 
   const menuItems = [
-    { id: 'dashboard', label: 'الرئيسية (الموظفين)', href: '/admin/staff_dashboard', icon: <FaHome />, feature: 'dashboard:staff' }, 
-    { id: 'sessions', label: 'إدارة الحصص', href: '/admin/sessions', icon: <FaChalkboardTeacher />, feature: 'academic:sessions' }, 
-    { id: 'students', label: 'الطلاب', href: '/admin/students', icon: <FaUsers />, feature: 'students:view' }, 
+    { id: 'dashboard', label: 'الرئيسية (الموظفين)', href: '/admin/staff_dashboard', icon: <FaHome />, feature: 'page_staff_dashboard' }, 
+    { id: 'sessions', label: 'إدارة الحصص', href: '/admin/sessions', icon: <FaChalkboardTeacher />, feature: 'page_sessions' }, 
+    { id: 'students', label: 'الطلاب', href: '/admin/students', icon: <FaUsers />, feature: 'page_students' }, 
     { id: 'instructors', label: 'المدرسين', href: '/admin/instructors', icon: <FaChalkboardTeacher />, feature: 'page_instructors' }, 
-    { id: 'courses', label: 'المواد الدراسية', href: '/admin/courses', icon: <FaLayerGroup />, feature: 'academic:sessions' }, 
-    { id: 'groups', label: 'إدارة المجموعات', href: '/admin/groups', icon: <FaObjectGroup />, feature: 'academic:sessions' }, 
-    { id: 'schedule', label: 'الجدول الدراسي', href: '/admin/schedule', icon: <FaCalendarAlt />, feature: 'academic:schedule' }, 
-    { id: 'exams', label: 'الاختبارات والنتائج', href: '/admin/exams', icon: <FaFileInvoiceDollar />, feature: 'academic:exams' },
+    { id: 'courses', label: 'المواد الدراسية', href: '/admin/courses', icon: <FaLayerGroup />, feature: 'page_courses' }, 
+    { id: 'groups', label: 'إدارة المجموعات', href: '/admin/groups', icon: <FaObjectGroup />, feature: 'page_groups' }, 
+    { id: 'schedule', label: 'الجدول الدراسي', href: '/admin/schedule', icon: <FaCalendarAlt />, feature: 'page_schedule' }, 
+    { id: 'exams', label: 'الاختبارات والنتائج', href: '/admin/exams', icon: <FaFileInvoiceDollar />, feature: 'page_exams' },
     { id: 'support', label: 'تذاكر الدعم', href: '/admin/support', icon: <FaHeadset />, feature: 'page_support' }, 
     { id: 'notifications', label: 'مركز البث', href: '/admin/notifications', icon: <FaBullhorn />, feature: 'page_notifications' },
-    { id: 'store', label: 'المتجر والملازم', href: '/admin/store', icon: <FaStore />, feature: 'store:sales' },
-    { id: 'finance_debts', label: 'المديونيات', href: '/admin/finance/debts', icon: <FaMoneyBillWave />, feature: 'students:finance' },
-    { id: 'finance_wallets', label: 'شحن المحافظ', href: '/admin/finance/wallets', icon: <FaWallet />, feature: 'wallet:view' },
+    { id: 'store', label: 'المتجر والملازم', href: '/admin/store', icon: <FaStore />, feature: 'page_store' },
+    { id: 'finance_debts', label: 'المديونيات', href: '/admin/finance/debts', icon: <FaMoneyBillWave />, feature: 'page_finance_debts' },
+    { id: 'finance_wallets', label: 'شحن المحافظ', href: '/admin/finance/wallets', icon: <FaWallet />, feature: 'page_finance_wallets' },
     { id: 'subscriptions', label: 'الاشتراكات الشهرية', href: '/admin/subscriptions', icon: <FaMoneyCheckAlt />, feature: 'page_subscriptions' }, 
-    { id: 'lessons', label: 'المحتوى الرقمي', href: '/admin/lessons', icon: <FaChalkboardTeacher />, feature: 'lessons:view' }, 
+    { id: 'lessons', label: 'المحتوى الرقمي', href: '/admin/lessons', icon: <FaChalkboardTeacher />, feature: 'page_lessons' }, 
     { id: 'discussions', label: 'استفسارات الدروس', href: '/admin/discussions', icon: <FaQuestionCircle />, feature: 'page_courses' },
-    { id: 'vouchers', label: 'أكواد الشحن', href: '/admin/vouchers', icon: <FaMoneyBillWave />, feature: 'vouchers:view' }, 
+    { id: 'vouchers', label: 'أكواد الشحن', href: '/admin/vouchers', icon: <FaMoneyBillWave />, feature: 'page_vouchers' }, 
   ];
 
   const adminItems = [
-    { id: 'dash', label: 'الرئيسية (الإدارة)', href: '/admin/dashboard', icon: <FaChartBar />, feature: 'dashboard:admin' }, 
-    { id: 'staff', label: 'الموظفين', href: '/admin/staff', icon: <FaUserShield />, feature: 'staff:view' }, 
+    { id: 'dash', label: 'الرئيسية (الإدارة)', href: '/admin/dashboard', icon: <FaChartBar />, feature: 'page_admin_dashboard' }, 
+    { id: 'staff', label: 'الموظفين', href: '/admin/staff', icon: <FaUserShield />, feature: 'page_staff' }, 
     { id: 'attendance', label: 'سجل الحضور والانصراف', href: '/admin/staff/attendance', icon: <FaCalendarAlt />, feature: 'page_staff_attendance' },
-    { id: 'settings', label: 'الإعدادات', href: '/admin/settings', icon: <FaCog />, feature: 'settings:general' }, 
+    { id: 'settings', label: 'الإعدادات', href: '/admin/settings', icon: <FaCog />, feature: 'page_settings' }, 
     { id: 'permissions', label: 'أذونات الموظفين', href: '/admin/staff/permissions', icon: <FaUserShield />, feature: 'page_staff_permissions' },
-    { id: 'finance_expenses', label: 'المصروفات', href: '/admin/expenses', icon: <FaFileInvoiceDollar />, feature: 'expenses:view' },
+    { id: 'finance_expenses', label: 'المصروفات', href: '/admin/expenses', icon: <FaFileInvoiceDollar />, feature: 'page_finance_expenses' },
     { id: 'subs_mgmt', label: 'تحصيل الاشتراكات', href: '/admin/subscriptions', icon: <FaMoneyCheckAlt />, feature: 'page_subscriptions' },
-    { id: 'audit', label: 'سجل الرقابة', href: '/admin/audit', icon: <FaUserSecret />, feature: 'logs:view' },
-    { id: 'super_admin', label: 'لوحة القيادة العليا', href: '/super-admin', icon: <FaCrown />, feature: 'super_admin:access' },
+    { id: 'audit', label: 'سجل الرقابة', href: '/admin/audit', icon: <FaUserSecret />, feature: 'page_audit' },
+    { id: 'super_admin', label: 'لوحة القيادة العليا', href: '/super-admin', icon: <FaCrown />, feature: 'page_super_admin' },
   ];
 
   const visibleMenuItems = useMemo(() => {
     return menuItems.filter(item => {
       if (!item.feature) return true; 
 
-      // 🛡️ خريطة الربط الشاملة بين (الصلاحية الوظيفية) و (ميزة الباقة الأساسية)
-      const packageMapping = {
-        // إدارة الحصص والطلاب
-        'dashboard:staff':   'page_staff_dashboard', // 🛡️ لوحة الموظفين
-        'academic:sessions': 'page_sessions',
-        'page_instructors':  'page_instructors', // 🛡️ مديول المدرسين المخصص
-        'students:view':     'page_students',
-        'academic:schedule': 'page_schedule',
-        'academic:exams':    'page_exams',
-        'students:finance':  'page_students',
-
-        // خدمات إضافية
-        'page_support':       'page_support',
-        'page_notifications': 'page_notifications',
-        'store:sales':        'page_store',
-        'wallet:view':        'page_finance_wallets',
-        'page_subscriptions': 'page_subscriptions',
-        'lessons:view':       'page_lessons',
-        'page_lessons':       'page_lessons',
-        'vouchers:view':      'page_vouchers',
-
-        // إدارة النظام والرقابة
-        'staff:view':              'page_staff',
-        'settings:general':        'page_settings',
-        'page_staff_permissions':  'page_staff_permissions',
-        'expenses:view':           'page_finance_expenses',
-        'logs:view':               'page_audit',
-        'super_admin:access':     'page_super_admin'
-      };
-
-      const requiredModule = packageMapping[item.feature];
-      
-      // 🛑 لو فيه ميزة باقة مرتبطة، والسنتر مش معاه الميزة دي -> اخفي العنصر فوراً (حتى للـ Super Admin)
-      if (requiredModule && !allowedFeatures?.includes(requiredModule)) {
-          return false;
-      }
-
-      // 🛡️ التحقق من الموديول البرمجي (Flexibility Logic)
-      if (item.module && !allowedFeatures?.includes(`module_${item.module}`)) {
-          return false;
-      }
-
-      // الـ Super Admin يرى كل شيء طالما المديول متاح في الباقة
+      // الـ Super Admin يرى كل شيء
       if (userRole === 'super_admin') return true;
 
-      // لو السنتر معاه الميزة، أو العنصر مش مرتبط بميزة باقة محددة، نتحقق من صلاحية اليوزر نفسه
+      // لو السنتر معاه الميزة واليوزر معاه الصلاحية
       return allowedFeatures?.includes(item.feature);
     });
   }, [allowedFeatures, userRole]);
@@ -164,24 +122,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     return adminItems.filter(item => {
       if (!item.feature) return true; 
 
-      const packageMapping = {
-        'dashboard:admin':         'page_admin_dashboard', // 🛡️ لوحة الإدارة
-        'staff:view':              'page_staff',
-        'settings:general':        'page_settings',
-        'page_staff_permissions':  'page_staff_permissions',
-        'page_staff_attendance':   'page_staff_attendance',
-        'expenses:view':           'page_finance_expenses',
-        'page_subscriptions':      'page_subscriptions',
-        'logs:view':               'page_audit',
-        'super_admin:access':     'page_super_admin'
-      };
-
-      const requiredModule = packageMapping[item.feature];
-      
-      // 🛑 التحقق من الباقة أولاً
-      if (requiredModule && !allowedFeatures?.includes(requiredModule)) return false;
-
-      // الـ Super Admin يرى كل شيء متاح في الباقة
+      // الـ Super Admin يرى كل شيء
       if (userRole === 'super_admin') return true;
 
       return allowedFeatures?.includes(item.feature);

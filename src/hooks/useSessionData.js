@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase-browser';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 export const useSessionData = () => {
   const { centerId } = useAuth();
@@ -127,6 +128,74 @@ export const useSessionData = () => {
 
   const loadMore = useCallback(() => fetchData(null, true), [fetchData]);
   const refreshData = fetchData; // already stable useCallback
+
+  // ================================================================
+  // 🔴 REALTIME: مزامنة فورية بين كل الأجهزة المفتوحة
+  // ================================================================
+  useEffect(() => {
+    if (!centerId) return;
+
+    const channel = supabase
+      .channel(`sessions-center-${centerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sessions',
+          filter: `center_id=eq.${centerId}`
+        },
+        (payload) => {
+          console.log('🔴 Realtime INSERT session:', payload.new.id);
+          setSessions(prev => {
+            // تجنب التكرار لو الجهاز نفسه هو اللي أضاف السيشن
+            const alreadyExists = prev.some(s => s.id === payload.new.id);
+            if (alreadyExists) return prev;
+            toast('📋 تم فتح دفتر جديد من جهاز آخر', { icon: '🔔', duration: 3000 });
+            return [payload.new, ...prev];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sessions',
+          filter: `center_id=eq.${centerId}`
+        },
+        (payload) => {
+          console.log('🔴 Realtime UPDATE session:', payload.new.id);
+          setSessions(prev =>
+            prev.map(s => s.id === payload.new.id ? { ...s, ...payload.new } : s)
+          );
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'sessions',
+          filter: `center_id=eq.${centerId}`
+        },
+        (payload) => {
+          console.log('🔴 Realtime DELETE session:', payload.old.id);
+          setSessions(prev => prev.filter(s => s.id !== payload.old.id));
+          toast('🗑️ تم حذف حصة من جهاز آخر', { icon: '⚠️', duration: 4000 });
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime sessions channel connected');
+        }
+      });
+
+    return () => {
+      console.log('🔌 Realtime sessions channel disconnected');
+      supabase.removeChannel(channel);
+    };
+  }, [centerId]);
 
   return {
     sessions, setSessions,

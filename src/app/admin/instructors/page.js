@@ -84,6 +84,28 @@ export default function InstructorsPage() {
     }
   }, [centerId]);
 
+  // 🔴 REALTIME: مزامنة فورية بين الأجهزة
+  useEffect(() => {
+    if (!centerId) return;
+    const channel = supabase
+      .channel(`instructors-${centerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'instructors', filter: `center_id=eq.${centerId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setInstructors(prev => {
+              if (prev.some(i => i.id === payload.new.id)) return prev;
+              return [{ ...payload.new, courses: [] }, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setInstructors(prev => prev.map(i => i.id === payload.new.id ? { ...i, ...payload.new } : i));
+          } else if (payload.eventType === 'DELETE') {
+            setInstructors(prev => prev.filter(i => i.id !== payload.old.id));
+          }
+        }
+      ).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [centerId]);
+
   // --- Handlers ---
   const handleSubmit = async (e) => {
     e.preventDefault();

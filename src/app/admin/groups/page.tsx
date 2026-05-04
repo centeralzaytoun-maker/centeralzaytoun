@@ -55,6 +55,26 @@ export default function GroupManager() {
     setSelectedCourseId('');
   }, [selectedGrade, allCourses]);
 
+  // 🔴 REALTIME: مزامنة فورية بين الأجهزة
+  useEffect(() => {
+    if (!centerId) return;
+    const channel = supabase
+      .channel(`groups-${centerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'groups', filter: `center_id=eq.${centerId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // نعيد جلب البيانات عشان نجيب الـ Join (courses) معاها
+            fetchData();
+          } else if (payload.eventType === 'UPDATE') {
+            setGroups(prev => prev.map(g => g.id === payload.new.id ? { ...g, ...payload.new } : g));
+          } else if (payload.eventType === 'DELETE') {
+            setGroups(prev => prev.filter(g => g.id !== payload.old.id));
+          }
+        }
+      ).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [centerId]);
+
   const fetchData = async () => {
     try {
       setDataLoading(true);

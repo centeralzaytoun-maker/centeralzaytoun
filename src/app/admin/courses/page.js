@@ -86,8 +86,30 @@ const fetchStages = async () => {
       fetchInstructors();
       fetchCourses();
       fetchStages();
-      fetchCenterType(); // 🆕
+      fetchCenterType();
     }
+  }, [centerId]);
+
+  // 🔴 REALTIME: مزامنة فورية بين الأجهزة
+  useEffect(() => {
+    if (!centerId) return;
+    const channel = supabase
+      .channel(`courses-${centerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courses', filter: `center_id=eq.${centerId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setCourses(prev => {
+              if (prev.some(c => c.id === payload.new.id)) return prev;
+              return [payload.new, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setCourses(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
+          } else if (payload.eventType === 'DELETE') {
+            setCourses(prev => prev.filter(c => c.id !== payload.old.id));
+          }
+        }
+      ).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [centerId]);
 
   // --- 1. Fetch Instructors (جلب قائمة المدرسين) ---

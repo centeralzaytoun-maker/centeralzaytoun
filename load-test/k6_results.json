@@ -1,0 +1,337 @@
+{
+    "root_group": {
+        "groups": {
+            "1. Dashboard Load": {
+                "name": "1. Dashboard Load",
+                "path": "::1. Dashboard Load",
+                "id": "0a30c0db039469de5954a7023eb4cc40",
+                "groups": {},
+                "checks": {
+                        "[Dashboard] students count 200": {
+                            "fails": 10391,
+                            "name": "[Dashboard] students count 200",
+                            "path": "::1. Dashboard Load::[Dashboard] students count 200",
+                            "id": "2fb9ca32bbc72fb32194150018900ea7",
+                            "passes": 0
+                        }
+                    }
+            },
+            "2. Students List": {
+                "checks": {
+                    "[Students List] status 200": {
+                        "id": "16bdca14dd9056ccf0ac977f2c2d2f0d",
+                        "passes": 10391,
+                        "fails": 0,
+                        "name": "[Students List] status 200",
+                        "path": "::2. Students List::[Students List] status 200"
+                    },
+                    "[Students List] returns array": {
+                        "path": "::2. Students List::[Students List] returns array",
+                        "id": "b806e98fd899a16e57abbf4934a0cdee",
+                        "passes": 10391,
+                        "fails": 0,
+                        "name": "[Students List] returns array"
+                    },
+                    "[Students List] p95 target met": {
+                        "path": "::2. Students List::[Students List] p95 target met",
+                        "id": "220f5bade9191fbbf0deb86970bb4eb0",
+                        "passes": 10330,
+                        "fails": 61,
+                        "name": "[Students List] p95 target met"
+                    }
+                },
+                "name": "2. Students List",
+                "path": "::2. Students List",
+                "id": "c14591546a091e2047732197d862582f",
+                "groups": {
+                    "3. Student Detail": {
+                        "path": "::2. Students List::3. Student Detail",
+                        "id": "79abecc5245b662c1edb59802d482800",
+                        "groups": {},
+                        "checks": {
+                                "[Student Detail] status 200": {
+                                    "name": "[Student Detail] status 200",
+                                    "path": "::2. Students List::3. Student Detail::[Student Detail] status 200",
+                                    "id": "37df39ad05c756728d7e9333ec5a67fb",
+                                    "passes": 10391,
+                                    "fails": 0
+                                },
+                                "[Student Wallet] status 200": {
+                                    "name": "[Student Wallet] status 200",
+                                    "path": "::2. Students List::3. Student Detail::[Student Wallet] status 200",
+                                    "id": "e67a48b2d7c82876dc152cdde44dfc09",
+                                    "passes": 10391,
+                                    "fails": 0
+                                }
+                            },
+                        "name": "3. Student Detail"
+                    }
+                }
+            },
+            "7. Create Session (Write Test)": {
+                "checks": {
+                    "[Create Session] status 201": {
+                        "name": "[Create Session] status 201",
+                        "path": "::7. Create Session (Write Test)::[Create Session] status 201",
+                        "id": "0b1f7c7a2dd47a3f0d0c4cd4142ac167",
+                        "passes": 10391,
+                        "fails": 0
+                    }
+                },
+                "name": "7. Create Session (Write Test)",
+                "path": "::7. Create Session (Write Test)",
+                "id": "4eecdea61f58c88f576695880e59a829",
+                "groups": {}
+            },
+            "4. Sessions List": {
+                "name": "4. Sessions List",
+                "path": "::4. Sessions List",
+                "id": "d8638b981adb243776df5a1a3eb568ad",
+                "groups": {},
+                "checks": {
+                        "[Sessions List] status 200": {
+                            "name": "[Sessions List] status 200",
+                            "path": "::4. Sessions List::[Sessions List] status 200",
+                            "id": "8d154feb02743d9fede7776bb4d5402c",
+                            "passes": 43,
+                            "fails": 10348
+                        },
+                        "[Sessions List] returns array": {
+                            "passes": 10391,
+                            "fails": 0,
+                            "name": "[Sessions List] returns array",
+                            "path": "::4. Sessions List::[Sessions List] returns array",
+                            "id": "388c74e59109f792f4e6a88b45e0c153"
+                        }
+                    }
+            },
+            "5. Courses List": {
+                "checks": {
+                    "[Courses List] status 200": {
+                        "name": "[Courses List] status 200",
+                        "path": "::5. Courses List::[Courses List] status 200",
+                        "id": "043d6100694f6cde1fb6326145d04d3c",
+                        "passes": 10391,
+                        "fails": 0
+                    }
+                },
+                "name": "5. Courses List",
+                "path": "::5. Courses List",
+                "id": "83ea4ed3cab4180e42ae1e658565e07b",
+                "groups": {}
+            },
+            "6. Center Settings": {
+                "checks": {
+                    "[Center Settings] status 200": {
+                        "name": "[Center Settings] status 200",
+                        "path": "::6. Center Settings::[Center Settings] status 200",
+                        "id": "80273061ac3ffe47497257228fd56eb5",
+                        "passes": 10391,
+                        "fails": 0
+                    }
+                },
+                "name": "6. Center Settings",
+                "path": "::6. Center Settings",
+                "id": "ffcebbb2e827812029a0d1a9405712dd",
+                "groups": {}
+            }
+        },
+        "checks": {},
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "metrics": {
+        "vus": {
+            "value": 2,
+            "min": 1,
+            "max": 100
+        },
+        "iteration_duration": {
+            "min": 11920.1058,
+            "med": 19354.3571,
+            "max": 26471.1576,
+            "p(90)": 22337.2517,
+            "p(95)": 23044.34935,
+            "avg": 19288.268560071185
+        },
+        "iterations": {
+            "count": 10391,
+            "rate": 4.9838724044943445
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 127.02399021643926,
+            "min": 82.0048,
+            "med": 129.2143,
+            "max": 1786.5865,
+            "p(90)": 151.43784,
+            "p(95)": 162.78995999999998
+        },
+        "http_req_blocked": {
+            "avg": 0.14734054951400255,
+            "min": 0,
+            "med": 0,
+            "max": 624.7662,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0.0900034077567125,
+            "min": 0,
+            "med": 0,
+            "max": 558.6511,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_duration": {
+            "min": 82.0048,
+            "med": 129.2143,
+            "max": 1786.5865,
+            "p(90)": 151.43777,
+            "p(95)": 162.78985499999996,
+            "avg": 127.0235619362909,
+            "thresholds": {
+                "p(99)<1500": false
+            }
+        },
+        "duration_student_detail": {
+            "min": 83.0153,
+            "med": 128.3084,
+            "max": 1229.6342,
+            "p(90)": 150.0558,
+            "p(95)": 160.7175,
+            "avg": 126.20092541622589
+        },
+        "data_sent": {
+            "count": 17216456,
+            "rate": 8257.590218611404
+        },
+        "http_req_connecting": {
+            "avg": 0.05700416514291215,
+            "min": 0,
+            "med": 0,
+            "max": 132.2425,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_sending": {
+            "p(90)": 0.2378,
+            "p(95)": 0.2787,
+            "avg": 0.06280695986911801,
+            "min": 0,
+            "med": 0,
+            "max": 6.996
+        },
+        "classora_error_rate": {
+            "passes": 20800,
+            "fails": 51937,
+            "thresholds": {
+                "rate<0.01": true
+            },
+            "value": 0.28596175261558765
+        },
+        "duration_sessions_list": {
+            "min": 86.6077,
+            "med": 132.5288,
+            "max": 1206.4216,
+            "p(90)": 155.6752,
+            "p(95)": 168.92595,
+            "avg": 131.48849334039096,
+            "thresholds": {
+                "p(95)<400": false
+            }
+        },
+        "duration_students_list": {
+            "avg": 128.86003107496887,
+            "min": 84.8406,
+            "med": 130.2951,
+            "max": 1223.61,
+            "p(90)": 152.8274,
+            "p(95)": 165.1445,
+            "thresholds": {
+                "p(95)<400": false
+            }
+        },
+        "http_req_receiving": {
+            "p(95)": 3.0127099999999976,
+            "avg": 0.8450975565393283,
+            "min": 0,
+            "med": 0,
+            "max": 480.3912,
+            "p(90)": 2.5095100000000006
+        },
+        "http_req_waiting": {
+            "avg": 126.11565741988176,
+            "min": 81.9847,
+            "med": 128.44234999999998,
+            "max": 1786.5865,
+            "p(90)": 150.26366000000002,
+            "p(95)": 161.58115999999987
+        },
+        "http_reqs": {
+            "count": 103910,
+            "rate": 49.83872404494345
+        },
+        "vus_max": {
+            "value": 100,
+            "min": 100,
+            "max": 100
+        },
+        "duration_courses_list": {
+            "med": 128.5902,
+            "max": 1184.5036,
+            "p(90)": 149.8704,
+            "p(95)": 162.024,
+            "avg": 126.72725784813824,
+            "min": 82.9195
+        },
+        "duration_center_settings": {
+            "med": 128.0318,
+            "max": 1087.8198,
+            "p(90)": 150.5654,
+            "p(95)": 162.46185,
+            "avg": 126.51090633240293,
+            "min": 82.6868
+        },
+        "group_duration": {
+            "avg": 2076.4288366333813,
+            "min": 171.8121,
+            "med": 2097.3594,
+            "max": 7318.6483,
+            "p(90)": 4335.70792,
+            "p(95)": 5389.8146400000005
+        },
+        "checks": {
+            "fails": 20800,
+            "passes": 93501,
+            "value": 0.818024339244626
+        },
+        "classora_successful_page_views": {
+            "count": 51937,
+            "rate": 24.91072861824875
+        },
+        "duration_dashboard_query": {
+            "min": 262,
+            "med": 396,
+            "max": 1433,
+            "p(90)": 454,
+            "p(95)": 490,
+            "avg": 380.609758444808,
+            "thresholds": {
+                "p(95)<600": false
+            }
+        },
+        "http_req_failed": {
+            "fails": 103909,
+            "passes": 1,
+            "thresholds": {
+                "rate<0.005": false
+            },
+            "value": 0.0000096237128284092
+        },
+        "data_received": {
+            "count": 259139849,
+            "rate": 124292.17037204614
+        }
+    }
+}

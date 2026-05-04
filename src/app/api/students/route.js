@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseBrowser } from '../../../lib/supabase';
+import { createClient as createServerClient } from '../../../lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Admin client for user creation
@@ -36,7 +36,9 @@ export async function GET(req) {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    let query = supabaseBrowser
+    const supabase = await createServerClient();
+
+    let query = supabase
       .from('students')
       .select('*', { count: 'exact' })
       .eq('center_id', centerId); // ← فلترة حسب المركز
@@ -117,51 +119,83 @@ export async function POST(req) {
       }
     }
 
-    // 🎯 NEW: Generate Sequential Unique ID with Collision Protection
-    let uniqueId = studentData.unique_id;
+    // 🎯 Generate Sequential Unique ID — Per-Prefix Independent Counter
+    let uniqueId = null;
     let wasAdjusted = false;
-    let finalNextCode = null;
-    
-    // Fetch center settings to get next code
-    const { data: settings, error: settingsError } = await supabaseAdmin
+
+    // Fetch center settings for start number and global prefix fallback
+    const { data: settings } = await supabaseAdmin
       .from('center_settings')
       .select('next_student_code, student_code_prefix')
       .eq('center_id', studentData.center_id)
       .maybeSingle();
 
-    if (!settingsError && settings?.next_student_code) {
-        const prefix = settings.student_code_prefix || '';
-        let codeToTry = settings.next_student_code;
-        let isUnique = false;
+    // 🎯 Priority: grade-specific prefix sent from Frontend, else global prefix from settings
+    const prefix = studentData.grade_prefix ?? settings?.student_code_prefix ?? null;
 
-        // Loop until we find a unique ID
-        while (!isUnique) {
-            const candidateId = `${prefix}${codeToTry}`;
-            const { data: existing } = await supabaseAdmin
-                .from('students')
-                .select('unique_id')
-                .eq('center_id', studentData.center_id)
-                .eq('unique_id', candidateId)
-                .maybeSingle();
+    // رقم البداية من الإعدادات (الحد الأدنى) أو 1 كافتراضي
+    const startNumber = settings?.next_student_code || 1;
 
-            if (!existing) {
-                uniqueId = candidateId;
-                isUnique = true;
-                finalNextCode = codeToTry + 1;
-            } else {
-                codeToTry++;
-                wasAdjusted = true;
+    // 🔢 إيجاد أعلى رقم مستخدم لنفس البادئة لضمان العد المستقل لكل صف
+    // نجيب كل أكواد نفس البادئة في هذا السنتر
+    let maxExistingNumber = 0;
+    if (prefix) {
+        const { data: existingWithPrefix } = await supabaseAdmin
+            .from('students')
+            .select('unique_id')
+            .eq('center_id', studentData.center_id)
+            .like('unique_id', `${prefix}-%`);
+
+        if (existingWithPrefix && existingWithPrefix.length > 0) {
+            // استخراج الأرقام من الأكواد الموجودة (مثال: "F-5" → 5)
+            const numbers = existingWithPrefix
+                .map(s => {
+                    const parts = s.unique_id.split('-');
+                    return parseInt(parts[parts.length - 1], 10);
+                })
+                .filter(n => !isNaN(n));
+            if (numbers.length > 0) {
+                maxExistingNumber = Math.max(...numbers);
             }
         }
-        
-        // Update next_student_code in DB to the next available one
-        await supabaseAdmin
-            .from('center_settings')
-            .update({ next_student_code: finalNextCode })
-            .eq('center_id', studentData.center_id);
     } else {
-        // Fallback if sequence is not set
-        uniqueId = uniqueId || ("S-" + Math.floor(1000 + Math.random() * 9000));
+        // بادئة فارغة: نجيب كل الأكواد الرقمية البحتة
+        const { data: existingNumeric } = await supabaseAdmin
+            .from('students')
+            .select('unique_id')
+            .eq('center_id', studentData.center_id);
+
+        if (existingNumeric && existingNumeric.length > 0) {
+            const numbers = existingNumeric
+                .map(s => parseInt(s.unique_id, 10))
+                .filter(n => !isNaN(n));
+            if (numbers.length > 0) {
+                maxExistingNumber = Math.max(...numbers);
+            }
+        }
+    }
+
+    // نبدأ من أعلى رقم موجود + 1، أو رقم البداية من الإعدادات — أيهما أكبر
+    let codeToTry = Math.max(startNumber, maxExistingNumber + 1);
+    let isUnique = false;
+
+    // Loop until we find a unique ID (حماية من الـ race conditions)
+    while (!isUnique) {
+        const candidateId = prefix ? `${prefix}-${codeToTry}` : `${codeToTry}`;
+        const { data: existing } = await supabaseAdmin
+            .from('students')
+            .select('unique_id')
+            .eq('center_id', studentData.center_id)
+            .eq('unique_id', candidateId)
+            .maybeSingle();
+
+        if (!existing) {
+            uniqueId = candidateId;
+            isUnique = true;
+        } else {
+            codeToTry++;
+            wasAdjusted = true;
+        }
     }
 
     // Insert student data
@@ -194,6 +228,9 @@ export async function POST(req) {
       name: studentData.name,
       phone: studentData.phone,
       parent_phone: studentData.parent_phone,
+      mother_phone: studentData.mother_phone || null,   // ✅ رقم الأم
+      address: studentData.address || null,             // ✅ العنوان
+      specialization: studentData.specialization || null, // ✅ التخصص
       grade: studentData.grade,
       center_id: studentData.center_id,
       enrolled_courses: studentData.enrolled_courses || [],
@@ -201,8 +238,10 @@ export async function POST(req) {
       group_ids: studentData.group_ids || {},
       enrollment_dates: studentData.enrollment_dates || {},
       is_free: studentData.is_free || false,
+      is_active: studentData.is_active ?? true,         // ✅ الحالة
       wallet_balance: studentData.has_wallet ? 0 : null,
       has_wallet: studentData.has_wallet || false,
+      max_devices: studentData.max_devices || 1,        // ✅ عدد الأجهزة
       id: authUser.user.id,
       unique_id: uniqueId,
       access_code: studentData.access_code,
@@ -250,27 +289,88 @@ export async function PUT(request) {
       email, 
       password, 
       create_auth_user, 
-      ...dataToUpdate // باقي البيانات لتحديث الجدول
+      grade_prefix,        // 🎯 بادئة الصف لتوليد unique_id
+      existing_unique_id,  // كود قديم إن وُجد
+      ...dataToUpdate
     } = body;
 
+    let finalUniqueId = existing_unique_id;
+
+    // لو مفيش كود قديم، نولد كود جديد بنفس منطق POST (عداد مستقل لكل بادئة)
+    if (!finalUniqueId && create_auth_user && dataToUpdate.center_id) {
+        const { data: settings } = await supabaseAdmin
+            .from('center_settings')
+            .select('next_student_code, student_code_prefix')
+            .eq('center_id', dataToUpdate.center_id)
+            .maybeSingle();
+
+        const prefix = grade_prefix ?? settings?.student_code_prefix ?? null;
+        const startNumber = settings?.next_student_code || 1;
+
+        // 🔢 إيجاد أعلى رقم مستخدم لنفس البادئة
+        let maxExistingNumber = 0;
+        if (prefix) {
+            const { data: existingWithPrefix } = await supabaseAdmin
+                .from('students')
+                .select('unique_id')
+                .eq('center_id', dataToUpdate.center_id)
+                .like('unique_id', `${prefix}-%`);
+
+            if (existingWithPrefix && existingWithPrefix.length > 0) {
+                const numbers = existingWithPrefix
+                    .map(s => {
+                        const parts = s.unique_id.split('-');
+                        return parseInt(parts[parts.length - 1], 10);
+                    })
+                    .filter(n => !isNaN(n));
+                if (numbers.length > 0) {
+                    maxExistingNumber = Math.max(...numbers);
+                }
+            }
+        }
+
+        let codeToTry = Math.max(startNumber, maxExistingNumber + 1);
+        let isUnique = false;
+
+        while (!isUnique) {
+            const candidateId = prefix ? `${prefix}-${codeToTry}` : `${codeToTry}`;
+            const { data: existing } = await supabaseAdmin
+                .from('students')
+                .select('unique_id')
+                .eq('center_id', dataToUpdate.center_id)
+                .eq('unique_id', candidateId)
+                .maybeSingle();
+
+            if (!existing) {
+                finalUniqueId = candidateId;
+                isUnique = true;
+            } else {
+                codeToTry++;
+            }
+        }
+    }
+
     // 1. إذا كان التفعيل مطلوباً (Quick Add Activation)، ننشئ المستخدم في Supabase Auth
-    if (create_auth_user && email && password) {
+    if (create_auth_user && finalUniqueId && password) {
+      const centerIdForEmail = dataToUpdate.center_id || '';
+      const centerPrefix = centerIdForEmail.split('-')[0];
+      const finalEmail = `${finalUniqueId.toLowerCase()}@${centerPrefix}.center.com`;
+
       // نتأكد الأول إن المستخدم مش موجود عشان ميديناش Error
       const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const userExists = existingUsers.users.some(u => u.email === email);
+      const userExists = existingUsers.users.some(u => u.email === finalEmail);
 
       if (!userExists) {
           const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             id: id,
-            email: email,
+            email: finalEmail,
             password: password,
-            email_confirm: true, // تفعيل الحساب فوراً
-            user_metadata: { role: 'student', student_id: id }
+            email_confirm: true,
+            user_metadata: { role: 'student', student_id: id, unique_id: finalUniqueId }
           });
 
           if (authError) {
             console.error("Auth Error:", authError);
-            // لو الخطأ مش "مستخدم موجود بالفعل"، رجع خطأ
             if (!authError.message.includes("already registered")) {
                 return NextResponse.json({ error: authError.message }, { status: 400 });
             }
@@ -278,9 +378,12 @@ export async function PUT(request) {
       }
     }
 
-    // 2. تنظيف البيانات قبل تحديث الجدول (عشان منبعتش حقول زيادة)
+    // 2. تنظيف البيانات قبل تحديث الجدول
     const cleanData = { ...dataToUpdate };
-    // (الإيميل والباسورد تم فصلهم فوق بالفعل في الـ destructuring فمش محتاجين نحذفهم تاني)
+    // لو عندنا unique_id جديد، نحدثه في الجدول
+    if (finalUniqueId) {
+        cleanData.unique_id = finalUniqueId;
+    }
     
     // 3. تحديث بيانات الطالب في الجدول
     const { error: dbError } = await supabaseAdmin
@@ -293,7 +396,7 @@ export async function PUT(request) {
       return NextResponse.json({ error: dbError.message }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, unique_id: finalUniqueId });
 
   } catch (error) {
     console.error("PUT Error:", error);

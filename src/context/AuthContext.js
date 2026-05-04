@@ -257,8 +257,15 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
                 .eq('id', targetCid)
                 .single();
 
-            if (centerError) console.error("❌ Center Data Fetch Error:", centerError);
-
+            if (centerError) {
+                if (centerError.code === 'PGRST116') {
+                    console.warn("⚠️ Center not found or access denied. Clearing active center.");
+                    targetCid = null;
+                    localStorage.removeItem("active_center_id");
+                } else {
+                    console.error("❌ Center Data Fetch Error:", centerError.message || centerError);
+                }
+            }
             if (centerData) {
                 const isExpired = centerData.subscription_end_date && new Date(centerData.subscription_end_date) < new Date();
 

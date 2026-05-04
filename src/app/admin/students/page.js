@@ -101,7 +101,10 @@ export default function StudentsPage() {
     name: '',
     phone: '',
     parent_phone: '',
+    mother_phone: '',
+    address: '',
     grade: '',
+    specialization: '', // 🆕 العلمي أو الأدبي
     enrolled_courses: [],
     course_discounts: {},
     group_ids: {}, 
@@ -210,7 +213,7 @@ export default function StudentsPage() {
 
         supabaseBrowser
           .from('educational_stages')
-          .select('name')
+          .select('name, code_prefix')
           .order('sort_order', { ascending: true })
           .eq('center_id', centerId),
 
@@ -254,6 +257,19 @@ export default function StudentsPage() {
     }
   }, [centerId]); // Fetch when centerId is available
 
+  // 🔴 REALTIME: مزامنة فورية — أي طالب يتضاف/يتعدّل/يُحذف من أي جهاز يحدّث القائمة
+  useEffect(() => {
+    if (!centerId) return;
+    const channel = supabaseBrowser
+      .channel(`students-${centerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `center_id=eq.${centerId}` },
+        () => {
+          // react-query يتولى التحديث الذكي
+          refetch();
+        }
+      ).subscribe();
+    return () => { supabaseBrowser.removeChannel(channel); };
+  }, [centerId, refetch]);
 
 
   // طباعة الكارنيه
@@ -549,7 +565,10 @@ const handleSubmit = async (e) => {
         name: formData.name,
         phone: formData.phone,
         parent_phone: formData.parent_phone,
+        mother_phone: formData.mother_phone,
+        address: formData.address,
         grade: formData.grade,
+        specialization: formData.specialization, // 🆕
         center_id: centerId,
         enrolled_courses: formData.enrolled_courses,
         course_discounts: formData.course_discounts,
@@ -571,10 +590,10 @@ const handleSubmit = async (e) => {
 
       if (!isEditing) {
         // --- أ- توليد بيانات الدخول (حالة الإضافة الجديدة) ---
-        const uniqueId = "S-" + Math.floor(1000 + Math.random() * 9000);
-        // 🔒 الحماية هنا: لو مفيش صلاحية، البيانات التقنية تبقى null
-        const centerPrefix = centerId.split('-')[0];
-        const technicalEmail = hasPortalAccess ? `${uniqueId.toLowerCase()}@${centerPrefix}.center.com` : null;
+        // 🎯 نجيب البادئة الخاصة بالصف المحدد لإرسالها للـ API
+        const gradeStage = stages.find(s => s.name === formData.grade);
+        const gradePrefix = gradeStage?.code_prefix?.trim() || null; // null = استخدم الإعداد العام
+        
         const password = formData.phone || "12345678"; 
 
         // 🎯 NEW: Generate PIN Code for Parent Access
@@ -584,6 +603,7 @@ const handleSubmit = async (e) => {
         const accessCode = generatePin(); 
 
         // --- ب- إنشاء المستخدم وتفعيله فوراً ---
+        // الـ API هو المسؤول عن توليد unique_id الصحيح بالبادئة والرقم التسلسلي
         const response = await fetch('/api/students', {
           method: 'POST',
           headers: {
@@ -591,9 +611,8 @@ const handleSubmit = async (e) => {
           },
           body: JSON.stringify({
             ...dataToSave,
-            unique_id: uniqueId,
+            grade_prefix: gradePrefix, // 🎯 بادئة الصف (الـ API يستخدمها بدل البادئة العامة)
             access_code: accessCode,
-            email: technicalEmail,
             password: password
           })
         });
@@ -669,25 +688,25 @@ const result = await response.json();
             console.log("🛠️ جاري تفعيل حساب Quick Add...");
             
             // 1. توليد البيانات الناقصة
-            const uniqueId = originalStudent?.unique_id || ("S-" + Math.floor(1000 + Math.random() * 9000));
+            const gradeStageEdit = stages.find(s => s.name === (formData.grade || originalStudent?.grade));
+            const gradePrefixEdit = gradeStageEdit?.code_prefix?.trim() || null;
             const accessCode = (originalStudent?.access_code && originalStudent?.access_code !== '0') 
                 ? originalStudent.access_code 
                 : Math.floor(1000 + Math.random() * 9000).toString();
             
-            const centerPrefix = centerId.split('-')[0];
-            const technicalEmail = `${uniqueId.toLowerCase()}@${centerPrefix}.center.com`;
             const password = formData.phone || "12345678";
 
             // 2. إرسال طلب PUT للـ API (عشان ينشئ اليوزر ويحدث البيانات)
+            // الـ API هو المسؤول عن توليد unique_id الصحيح
             const response = await fetch('/api/students', {
                 method: 'PUT', 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: editId, 
                     ...dataToSave,
-                    unique_id: uniqueId,
+                    existing_unique_id: originalStudent?.unique_id || null, // لو عنده كود قديم نحتفظ بيه
+                    grade_prefix: gradePrefixEdit, // 🎯 بادئة الصف للـ API
                     access_code: accessCode,
-                    email: technicalEmail, 
                     password: password,    
                     create_auth_user: true 
                 })
@@ -698,8 +717,10 @@ const result = await response.json();
                  console.warn("API Activation Failed, falling back to DB update only.");
                  throw new Error("فشل تفعيل الحساب عبر الـ API، تأكد أن السيرفر يدعم التعديل.");
             } else {
-                toast.success(`🔐 تم تفعيل الحساب!\nكود: ${uniqueId}`, { icon: '👏' });
-                navigator.clipboard.writeText(`👤 كود: ${uniqueId}\n🔑 سر: ${password}\n👨‍👩‍👧‍👦 ولي أمر: ${accessCode}`);
+                const putResult = await response.json();
+                const activatedId = putResult.unique_id || '???';
+                toast.success(`🔐 تم تفعيل الحساب!\nكود: ${activatedId}`, { icon: '👏' });
+                navigator.clipboard.writeText(`👤 كود: ${activatedId}\n🔑 سر: ${password}\n👨‍👩‍👧‍👦 ولي أمر: ${accessCode}`);
             }
 
         } else {
@@ -738,7 +759,10 @@ const handleEdit = (student) => {
       name: student.name,
       phone: student.phone || '',
       parent_phone: student.parent_phone || '',
+      mother_phone: student.mother_phone || '',
+      address: student.address || '',
       grade: student.grade || '',
+      specialization: student.specialization || '',
       enrolled_courses: student.enrolled_courses || [],
       course_discounts: student.course_discounts || {},
       group_ids: student.group_ids || {},
@@ -1020,7 +1044,7 @@ const handlePrintCard = (student) => {
  const resetForm = () => {
 
     setFormData({
-      name: '', phone: '', parent_phone: '', grade: '', 
+      name: '', phone: '', parent_phone: '', mother_phone: '', address: '', grade: '', specialization: '', 
       enrolled_courses: [], course_discounts: {}, group_ids: {}, enrollment_dates: {}, 
       has_wallet: false, is_free: false, unique_id: '', is_active: true,
       subscription_type: 'عادي', free_courses: [], center_only_courses: [],
@@ -1490,7 +1514,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
 
   const sendWhatsapp = (student) => {
 
-    const targetPhone = student.parent_phone || student.phone;
+    const targetPhone = student.phone || student.parent_phone;
 
     if (!targetPhone) return toast.error('لا يوجد رقم هاتف مسجل');
 
@@ -1624,7 +1648,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
 
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 📱 خانة رقم الطالب */}
                 <div className="flex flex-col">
                     <input 
@@ -1650,11 +1674,11 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     )}
                 </div>
 
-                {/* 👨‍👩‍👧‍👦 خانة رقم ولي الأمر */}
+                {/* 👨‍👩‍👧‍👦 خانة رقم الأب */}
                 <div className="flex flex-col">
                     <input 
                         type="tel" 
-                        placeholder="رقم ولي الأمر" 
+                        placeholder="رقم الأب (أساسي)" 
                         required
                         maxLength="11"
                         value={formData.parent_phone} 
@@ -1675,35 +1699,90 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                         </span>
                     )}
                 </div>
+
+                {/* 👨‍👩‍👧‍👦 خانة رقم الأم */}
+                <div className="flex flex-col">
+                    <input 
+                        type="tel" 
+                        placeholder="رقم الأم (اختياري)" 
+                        maxLength="11"
+                        value={formData.mother_phone || ''} 
+                        onChange={(e) => {
+                            const onlyNumbers = e.target.value.replace(/[^0-9]/g, '');
+                            setFormData({...formData, mother_phone: onlyNumbers});
+                        }}
+                        className={`w-full p-3 min-h-[44px] border-2 rounded-lg outline-none transition-all duration-300 focus:ring-2 text-left font-bold text-sm md:text-base appearance-none opacity-100 placeholder:text-gray-400
+                            ${!formData.mother_phone ? 'border-gray-300 focus:ring-blue-500 bg-white text-gray-900' : 
+                               formData.mother_phone.length === 11 ? 'border-green-500 bg-white text-green-700 focus:ring-green-200' : 
+                               'border-red-400 bg-white text-red-600 focus:ring-red-200'}`}
+                        dir="ltr"
+                    />
+                    {/* رسالة التوجيه تحت الخانة */}
+                    {formData.mother_phone && formData.mother_phone.length !== 11 && (
+                        <span className="text-red-500 text-xs mt-1 font-bold">
+                            مطلوب 11 رقم (الحالي: {formData.mother_phone.length})
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* العنوان */}
+            <div>
+                <input 
+                    type="text" 
+                    placeholder="العنوان (مثال: شارع النصر، المعادي)" 
+                    value={formData.address || ''} 
+                    onChange={e => setFormData({...formData, address: e.target.value})}
+                    className="w-full p-3 min-h-[44px] border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 text-sm md:text-base appearance-none opacity-100 placeholder:text-gray-400"
+                />
             </div>
 
             
 
-            <div>
-                <label className="block text-sm font-bold text-gray-600 mb-1">الصف الدراسي</label>
-                <select 
-                    value={formData.grade} 
-                    onChange={e => setFormData({...formData, grade: e.target.value, enrolled_courses: []})} 
-                    className="w-full p-3 min-h-[44px] border-2 border-gray-300 rounded-lg mb-4 bg-white focus:ring-2 focus:ring-blue-500 text-sm md:text-base text-gray-900 appearance-none opacity-100" 
-                    required
-                >
-                    <option value="" className="text-gray-900">اختر الصف الدراسي</option>
-                    {stages.length > 0 ? (
-                        stages.map((stage, idx) => (
-                            <option key={idx} value={stage.name} className="text-gray-900">{stage.name}</option>
-                        ))
-                    ) : (
-                        <>
-                            <option value="1 Prep" className="text-gray-900">الأول الإعدادي</option>
-                            <option value="2 Prep" className="text-gray-900">الثاني الإعدادي</option>
-                            <option value="3 Prep" className="text-gray-900">الثالث الإعدادي</option>
-                            <option value="1 Sec" className="text-gray-900">الأول الثانوي</option>
-                            <option value="2 Sec" className="text-gray-900">الثاني الثانوي</option>
-                            <option value="3 Sec" className="text-gray-900">الثالث الثانوي</option>
-                        </>
-                    )}
-                </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-bold text-gray-600 mb-1">الصف الدراسي</label>
+                    <select 
+                        value={formData.grade} 
+                        onChange={e => setFormData({...formData, grade: e.target.value, enrolled_courses: []})} 
+                        className="w-full p-3 min-h-[44px] border-2 border-gray-300 rounded-lg mb-4 bg-white focus:ring-2 focus:ring-blue-500 text-sm md:text-base text-gray-900 appearance-none opacity-100" 
+                        required
+                    >
+                        <option value="" className="text-gray-900">اختر الصف الدراسي</option>
+                        {stages.length > 0 ? (
+                            stages.map((stage, idx) => (
+                                <option key={idx} value={stage.name} className="text-gray-900">{stage.name}</option>
+                            ))
+                        ) : (
+                            <>
+                                <option value="1 Prep" className="text-gray-900">الأول الإعدادي</option>
+                                <option value="2 Prep" className="text-gray-900">الثاني الإعدادي</option>
+                                <option value="3 Prep" className="text-gray-900">الثالث الإعدادي</option>
+                                <option value="1 Sec" className="text-gray-900">الأول الثانوي</option>
+                                <option value="2 Sec" className="text-gray-900">الثاني الثانوي</option>
+                                <option value="3 Sec" className="text-gray-900">الثالث الثانوي</option>
+                            </>
+                        )}
+                    </select>
+                </div>
+                {/* التخصص (علمي/أدبي) - يظهر دائماً أو يمكن ربطه بالصف الثاني والثالث الثانوي لاحقاً */}
+                <div>
+                    <label className="block text-sm font-bold text-gray-600 mb-1">التخصص (الشعبة)</label>
+                    <select 
+                        value={formData.specialization || ''} 
+                        onChange={e => setFormData({...formData, specialization: e.target.value})} 
+                        className="w-full p-3 min-h-[44px] border-2 border-gray-300 rounded-lg mb-4 bg-white focus:ring-2 focus:ring-blue-500 text-sm md:text-base text-gray-900 appearance-none opacity-100" 
+                    >
+                        <option value="" className="text-gray-900">عام (بدون تخصص)</option>
+                        <option value="بكالوريا" className="text-gray-900">بكالوريا</option>
+                        <option value="علمي علوم" className="text-gray-900">علمي علوم</option>
+                        <option value="علمي رياضة" className="text-gray-900">علمي رياضة</option>
+                        <option value="أدبي" className="text-gray-900">أدبي</option>
+                    </select>
+                </div>
+            </div>
 
+            <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">
 
                     الكورسات المتاحة {formData.grade ? `لـ (${formData.grade})` : ''}:
@@ -1731,7 +1810,6 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     {formCourses.length === 0 && formData.grade && <option disabled>لا توجد كورسات لهذا الصف</option>}
 
                 </select>
-
             </div>
 
             {formData.enrolled_courses.length > 0 && (
@@ -2212,11 +2290,21 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                         <div className="hidden md:block w-px h-8 bg-gray-200"></div>
                         <div className="flex items-center gap-2">
                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-emerald-500 shadow-sm border border-emerald-50">
-                              <FaWhatsapp size={14} />
+                              <FaPhoneAlt size={12} />
                            </div>
                            <div className="flex flex-col">
-                              <span className="text-[10px] text-gray-400 font-bold">رقم ولي الأمر</span>
+                              <span className="text-[10px] text-gray-400 font-bold">رقم الأب</span>
                               <span className="font-bold text-gray-800">{student.parent_phone || '---'}</span>
+                           </div>
+                        </div>
+                        <div className="hidden md:block w-px h-8 bg-gray-200"></div>
+                        <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-pink-500 shadow-sm border border-pink-50">
+                              <FaPhoneAlt size={12} />
+                           </div>
+                           <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 font-bold">رقم الأم</span>
+                              <span className="font-bold text-gray-800">{student.mother_phone || '---'}</span>
                            </div>
                         </div>
                         <div className="hidden md:block w-px h-8 bg-gray-200"></div>
@@ -2226,7 +2314,9 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                            </div>
                            <div className="flex flex-col">
                               <span className="text-[10px] text-gray-400 font-bold">المستوى الدراسي</span>
-                              <span className="font-black text-purple-700">{student.grade}</span>
+                              <span className="font-black text-purple-700">
+                                  {student.grade} {student.specialization && <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded ml-1">{student.specialization}</span>}
+                              </span>
                            </div>
                         </div>
                         <div className="hidden md:block w-px h-8 bg-gray-200"></div>

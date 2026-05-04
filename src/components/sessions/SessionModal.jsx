@@ -124,7 +124,7 @@ export const SessionModal = ({
         const isPresent = attendanceMap[student.id] || false;
         const paid = parseFloat(paymentsMap[student.id]) || 0;
         const required = calculateRequiredPayment(student, activeSession);
-        const remaining = isPresent ? Math.max(0, required - paid) : 0;
+        const remaining = isPresent ? (required - paid) : 0;
 
         return {
           'م': index + 1,
@@ -1947,7 +1947,8 @@ export const SessionModal = ({
 
                         let required = calculateRequiredPayment(student, activeSession);
                         const paid = parseFloat(paymentsMap[student.id]) || 0;
-                        const remaining = isPresent ? Math.max(0, required - paid) : 0;
+                        // الباقي: موجب = عليه، سالب = له رصيد زيادة
+                        const remaining = isPresent ? (required - paid) : 0;
 
                         return (
                           <tr
@@ -2039,7 +2040,21 @@ export const SessionModal = ({
                                 disabled={activeSession.is_completed}
                               />
                             </td>
-                            <td className={`p-3 text-center align-middle font-black ${remaining > 0 ? 'text-red-600' : 'text-green-600'}`}>{remaining.toFixed(2)}</td>
+                            <td className={`p-3 text-center align-middle font-black ${remaining > 0 ? 'text-red-600' : remaining < 0 ? 'text-emerald-600' : 'text-green-600'}`}>
+                              {remaining > 0 ? (
+                                // عليه فلوس (مديون في هذه الحصة)
+                                <span>{remaining.toFixed(2)}</span>
+                              ) : remaining < 0 ? (
+                                // دفع زيادة ← له رصيد
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-emerald-600 font-black">{Math.abs(remaining).toFixed(2)}</span>
+                                  <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-black border border-emerald-200">له رصيد ✓</span>
+                                </div>
+                              ) : (
+                                // وفّى بالظبط
+                                <span className="text-green-600">✓</span>
+                              )}
+                            </td>
                             <td className="p-3 text-center align-middle">
                               <div className="flex justify-center">
                                 <label className="relative inline-flex items-center cursor-pointer">

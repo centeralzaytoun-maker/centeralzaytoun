@@ -75,6 +75,26 @@ function SchedulePage() {
     }
   }, [centerId]);
 
+  // 🔴 REALTIME: مزامنة فورية بين الأجهزة
+  useEffect(() => {
+    if (!centerId) return;
+    const channel = supabaseBrowser
+      .channel(`schedule-${centerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule', filter: `center_id=eq.${centerId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // نعيد الجلب عشان نجيب الـ joins
+            fetchData();
+          } else if (payload.eventType === 'UPDATE') {
+            setSchedule(prev => prev.map(s => s.id === payload.new.id ? { ...s, ...payload.new } : s));
+          } else if (payload.eventType === 'DELETE') {
+            setSchedule(prev => prev.filter(s => s.id !== payload.old.id));
+          }
+        }
+      ).subscribe();
+    return () => { supabaseBrowser.removeChannel(channel); };
+  }, [centerId]);
+
   useEffect(() => {
     if (selectedGrade) {
       const filtered = allCourses.filter(c => String(c.grade) === String(selectedGrade));

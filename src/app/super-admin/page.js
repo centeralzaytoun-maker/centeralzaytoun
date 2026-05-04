@@ -15,9 +15,9 @@ export default function SuperAdminDashboard() {
     const [activeTab, setActiveTab] = useState('dashboard');
 
     // 🛡️ Package Guard
-    if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_super_admin')) {
-        return <AccessDenied />;
-    }
+    // if (!authLoading && allowedFeatures && !allowedFeatures.includes('page_super_admin')) {
+    //     return <AccessDenied />;
+    // }
     
     // 📊 إحصائيات عامة
     const [totalStats, setTotalStats] = useState({

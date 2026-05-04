@@ -95,6 +95,21 @@ export default function StaffDashboard() {
     }
   }, [user, centerId]);
 
+  // 🔴 REALTIME: مزامنة فورية — تحديث الداشبورد لما أي جهاز يغير حصة أو مصروف
+  useEffect(() => {
+    if (!centerId) return;
+    const channel = supabase
+      .channel(`staff-dashboard-${centerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions', filter: `center_id=eq.${centerId}` },
+        () => { fetchDashboardData(); }
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: `center_id=eq.${centerId}` },
+        () => { fetchDashboardData(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [centerId]);
+
   // 🔄 حارس تغيير اليوم (Day Change Guard)
   useEffect(() => {
     const checkMidnight = setInterval(async () => {
@@ -592,7 +607,7 @@ export default function StaffDashboard() {
             </p>
 
             <div className="flex flex-wrap justify-center lg:justify-start gap-4 pt-4">
-              {allowedFeatures?.includes('academic:sessions') && (
+              {allowedFeatures?.includes('page_sessions') && (
                 <Link 
                   href="/admin/sessions" 
                   className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-slate-200 hover:bg-black transition-all flex items-center gap-3 active:scale-95 text-sm md:text-base group"
@@ -601,7 +616,7 @@ export default function StaffDashboard() {
                   <FaArrowLeft className="text-xs opacity-60 group-hover:-translate-x-1 transition-transform" />
                 </Link>
               )}
-              {(allowedFeatures?.includes('finance:reports') || allowedFeatures?.includes('expenses:view')) && (
+              {(allowedFeatures?.includes('page_reports') || allowedFeatures?.includes('page_finance_expenses')) && (
                 <button 
                   onClick={() => setShowReportModal(true)}
                   aria-label="عرض تقرير اليوم"
@@ -655,7 +670,7 @@ export default function StaffDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 px-1 md:px-0">
         
         {/* Sessions Card */}
-        {allowedFeatures?.includes('academic:sessions') && (
+        {allowedFeatures?.includes('page_sessions') && (
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-[2rem] p-6 shadow-xl shadow-blue-100 relative overflow-hidden group">
             <div className="absolute -left-4 -top-4 w-32 h-32 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
             <div className="relative z-10">
@@ -676,7 +691,7 @@ export default function StaffDashboard() {
         {/* كارت الطلاب (Students Card) */}
         {loading ? (
              <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse"></div>
-        ) : allowedFeatures?.includes('students:view') && (
+        ) : allowedFeatures?.includes('page_students') && (
           <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex flex-col justify-between group hover:border-purple-200 transition-all">
             <div className="flex justify-between items-start">
               <div>
@@ -702,7 +717,7 @@ export default function StaffDashboard() {
         {/* كارت صافي الخزنة */}
         {loading ? (
             <div className="h-32 bg-white rounded-[2rem] border border-slate-100 animate-pulse sm:col-span-1 lg:col-span-2"></div>
-        ) : (allowedFeatures?.includes('expenses:view') || allowedFeatures?.includes('finance:reports')) && (
+        ) : (allowedFeatures?.includes('page_finance_expenses') || allowedFeatures?.includes('page_reports')) && (
           <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-[2rem] p-6 shadow-xl shadow-emerald-100 relative overflow-hidden group sm:col-span-1 lg:col-span-2">
             <div className="absolute right-0 bottom-0 w-48 h-48 bg-white/5 rounded-full translate-x-10 translate-y-10 group-hover:scale-110 transition-transform duration-700"></div>
             <div className="relative z-10 h-full flex flex-col">

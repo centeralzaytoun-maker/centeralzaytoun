@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase-browser';
 import { calculateTotalStudentDebt, calculateRequiredPayment } from '../utils/sessionCalculations';
 import { useAuth } from '../context/AuthContext';
@@ -54,6 +54,94 @@ export const useAttendance = (activeSession, students, courses, groups, centerCo
   const { centerId, user } = useAuth();
   const [attendanceMap, setAttendanceMap] = useState({});
   const [paymentsMap, setPaymentsMap] = useState({});
+  
+  // 🔴 مرجع لمنع التعارض: لو الجهاز الحالي بيعدّل دلوقتي، لا نكتب فوقه
+  const isEditingRef = useRef(false);
+  const localChangesRef = useRef({ attendance: {}, payments: {} });
+
+  // ================================================================
+  // 🔴 REALTIME: مزامنة الدفتر المفتوح بين كل الأجهزة
+  // ================================================================
+  useEffect(() => {
+    if (!activeSession?.id || !centerId) return;
+
+    const channelName = `session-ledger-${activeSession.id}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sessions',
+          filter: `id=eq.${activeSession.id}`
+        },
+        (payload) => {
+          const remoteSession = payload.new;
+          console.log('🔴 Realtime UPDATE on active session:', remoteSession.id);
+
+          // ✅ دمج ذكي: البيانات الجديدة من الجهاز التاني
+          const remoteAttendees = remoteSession.attendees || [];
+          const remotePayments = remoteSession.payments || {};
+
+          setAttendanceMap(prev => {
+            const merged = { ...prev };
+            // نضيف فقط الطلاب اللي الجهاز التاني سجلهم ومش عندنا عنهم تعديل محلي
+            remoteAttendees.forEach(uniqueId => {
+              const student = students.find(s => s.unique_id === uniqueId);
+              if (student && !localChangesRef.current.attendance[student.id]) {
+                merged[student.id] = true;
+              }
+            });
+            // لو جهاز تاني شال حضور طالب مكانش في التعديلات المحلية نشيله
+            Object.keys(prev).forEach(studentId => {
+              const student = students.find(s => s.id === studentId);
+              if (student && !remoteAttendees.includes(student.unique_id) && !localChangesRef.current.attendance[studentId]) {
+                delete merged[studentId];
+              }
+            });
+            return merged;
+          });
+
+          setPaymentsMap(prev => {
+            const merged = { ...prev };
+            Object.entries(remotePayments).forEach(([uniqueId, amount]) => {
+              const student = students.find(s => s.unique_id === uniqueId);
+              if (student && !localChangesRef.current.payments[student.id]) {
+                merged[student.id] = amount;
+              }
+            });
+            return merged;
+          });
+
+          // إشعار للمستخدم
+          toast('🔄 تم تحديث الدفتر من جهاز آخر', {
+            icon: '📡',
+            duration: 2500,
+            position: 'bottom-right',
+            style: {
+              background: '#1e3a5f',
+              color: '#fff',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              borderRadius: '12px'
+            }
+          });
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`✅ Realtime ledger channel connected: ${channelName}`);
+        }
+      });
+
+    return () => {
+      console.log(`🔌 Realtime ledger channel disconnected: ${channelName}`);
+      supabase.removeChannel(channel);
+      // مسح التعديلات المحلية عند إغلاق السيشن
+      localChangesRef.current = { attendance: {}, payments: {} };
+    };
+  }, [activeSession?.id, centerId, students]);
 
   // Stub toast function - the main component will handle actual toasts
   const showToast = useCallback((msg, type = 'success') => {
@@ -67,6 +155,9 @@ export const useAttendance = (activeSession, students, courses, groups, centerCo
     if (!students || !Array.isArray(students)) return;
     const student = students.find(s => s.id === studentId);
     if (!student || !activeSession) return;
+
+    // 🔴 تسجيل التعديل المحلي عشان الـ Realtime ميكتبش فوقيه
+    localChangesRef.current.attendance[studentId] = true;
 
     // 1. منع تكرار التحضير
     if (isChecked && attendanceMap[studentId]) {
@@ -414,6 +505,10 @@ export const useAttendance = (activeSession, students, courses, groups, centerCo
 
       if (error) throw error;
       if (!silent) showToast('تم حفظ الدفتر المالي بنجاح 💾');
+
+      // 🔴 بعد الحفظ: امسح التعديلات المحلية عشان الـ Realtime يقدر يزامن تاني
+      localChangesRef.current = { attendance: {}, payments: {} };
+
       return { attendeesList, paymentsForDB };
     } catch (error) {
       showToast('حدث خطأ في حفظ الدفتر', 'error');
@@ -421,11 +516,25 @@ export const useAttendance = (activeSession, students, courses, groups, centerCo
     }
   }, [activeSession, attendanceMap, paymentsMap, students, centerId]);
 
+  // 🔴 Wrapper للـ setPaymentsMap يتبع التغييرات المحلية
+  const setPaymentsMapTracked = useCallback((updater) => {
+    setPaymentsMap(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      // سجّل كل تغيير في المدفوعات كـ local change
+      Object.keys(next).forEach(studentId => {
+        if (next[studentId] !== prev[studentId]) {
+          localChangesRef.current.payments[studentId] = true;
+        }
+      });
+      return next;
+    });
+  }, []);
+
   return {
     attendanceMap,
     paymentsMap,
     setAttendanceMap,
-    setPaymentsMap,
+    setPaymentsMap: setPaymentsMapTracked, // 🔴 الـ tracked version
     handleAttendanceChange,
     initializeSessionData,
     clearAttendanceData,
