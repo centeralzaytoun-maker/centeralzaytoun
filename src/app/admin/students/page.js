@@ -2406,49 +2406,37 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 <button 
                     onClick={() => handleEdit(student)} 
                     className={`flex items-center justify-center gap-1 px-3 md:px-4 py-2 min-h-[44px] rounded font-bold text-xs md:text-sm transition
-                        ${(role === 'admin' || role === 'super_admin' || role === 'staff' || (allowedFeatures && allowedFeatures.includes('students:edit'))) 
+                        ${(role === 'admin' || role === 'super_admin' || role === 'staff') 
                             ? 'bg-yellow-400 hover:bg-yellow-500 text-black' 
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'}`}
                 >
-                    <FaEdit /> تعديل {(role === 'staff' && !(allowedFeatures && allowedFeatures.includes('students:edit'))) && '🔒'}
+                    <FaEdit /> تعديل
                 </button>
 
                 {/* 2. زر واتساب المباشر (محمي) */}
                 <button 
                     onClick={() => {
-                        if (!allowedFeatures?.includes('action_whatsapp_integration')) return toast.error('🔒 خدمة واتساب غير مفعلة في باقتك');
                         sendWhatsapp(student);
                     }} 
-                    className={`flex items-center justify-center gap-1 px-3 md:px-4 py-2 min-h-[44px] rounded font-bold text-xs md:text-sm transition
-                        ${allowedFeatures?.includes('action_whatsapp_integration') 
-                            ? 'bg-green-500 hover:bg-green-600 text-white' 
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                    className="flex items-center justify-center gap-1 px-3 md:px-4 py-2 min-h-[44px] rounded font-bold text-xs md:text-sm transition bg-green-500 hover:bg-green-600 text-white"
                 >
-                    <FaWhatsapp className="text-base md:text-lg" /> <span className="hidden sm:inline">واتساب</span> {allowedFeatures?.includes('action_whatsapp_integration') ? '' : '🔒'}
+                    <FaWhatsapp className="text-base md:text-lg" /> <span className="hidden sm:inline">واتساب</span>
                 </button>
 
                 {/* 3. زر طباعة الكارنيه (محمي) */}
                 <button 
                     onClick={() => {
-                        if (!allowedFeatures?.includes('action_print_id_card')) return toast.error('🔒 طباعة الكارنيهات تتطلب باقة أعلى');
                         handlePrintCard(student);
                     }} 
-                    className={`p-2 min-h-[44px] rounded-lg transition flex items-center justify-center gap-1
-                        ${allowedFeatures?.includes('action_print_id_card') 
-                            ? 'bg-purple-100 text-purple-600 hover:bg-purple-200' 
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                    className="p-2 min-h-[44px] rounded-lg transition flex items-center justify-center gap-1 bg-purple-100 text-purple-600 hover:bg-purple-200"
                 >
                     <FaIdCard />
-                    <span className="text-[10px] font-bold hidden sm:inline">طباعة كارنيه {allowedFeatures?.includes('action_print_id_card') ? '' : '🔒'}</span>
+                    <span className="text-[10px] font-bold hidden sm:inline">طباعة كارنيه</span>
                 </button>
 
                 {/* 4. زر إرسال التقرير لولي الأمر (محمي + كودك الأصلي) */}
                 <button 
                     onClick={() => {
-                        // الحماية أولاً
-                        if (!allowedFeatures?.includes('action_whatsapp_integration')) return toast.error('🔒 خدمة التقارير عبر واتساب غير مفعلة');
-
-                        // كودك الأصلي للتقارير
                         let phone = (student.parent_phone || "").replace(/\D/g, ''); 
                         if (phone.startsWith('01')) phone = '2' + phone;
                         
@@ -2467,14 +2455,11 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                         const encodedMsg = encodeURIComponent(finalMsg);
                         window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank');
                     }} 
-                    className={`p-2 min-h-[44px] rounded-lg transition shadow-sm flex items-center justify-center gap-1
-                        ${allowedFeatures?.includes('action_whatsapp_integration') 
-                            ? 'bg-blue-100 text-blue-600 hover:bg-blue-200' 
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                    className="p-2 min-h-[44px] rounded-lg transition shadow-sm flex items-center justify-center gap-1 bg-blue-100 text-blue-600 hover:bg-blue-200"
                     title="إرسال رابط التقرير لولي الأمر"
                 >
                     <FaWhatsapp className="text-sm" />
-                    <span className="text-[10px] font-bold hidden sm:inline">إرسال التقرير {allowedFeatures?.includes('action_whatsapp_integration') ? '' : '🔒'}</span>
+                    <span className="text-[10px] font-bold hidden sm:inline">إرسال التقرير</span>
                 </button>
 
                 {/* 5. زر إرسال بيانات الدخول (محمي) */}
@@ -2513,11 +2498,11 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 <button 
                   onClick={() => handleDelete(student.id)} 
                   className={`flex items-center justify-center gap-1 px-3 md:px-4 py-2 min-h-[44px] rounded font-bold text-xs md:text-sm transition
-                    ${(role === 'admin' || role === 'super_admin' || role === 'staff' || (allowedFeatures && allowedFeatures.includes('students:delete'))) 
+                    ${(role === 'admin' || role === 'super_admin' || role === 'staff') 
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'}`}
                 >
-                  <FaTrash /> <span className="hidden sm:inline">حذف</span> {(role === 'staff' && !(allowedFeatures && allowedFeatures.includes('students:delete'))) && '🔒'}
+                  <FaTrash /> <span className="hidden sm:inline">حذف</span>
                 </button>
             
             </div>
