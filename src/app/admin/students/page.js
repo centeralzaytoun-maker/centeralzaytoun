@@ -111,7 +111,7 @@ export default function StudentsPage() {
     group_ids: {}, 
     has_wallet: false,
     is_free: false,
-    is_active: false, // حساب الطالب معطل دائماً
+    is_active: true, // تفعيل الطالب تلقائياً ليظهر في الدفتر
     unique_id: '',
     free_courses: [],
     center_only_courses: [],

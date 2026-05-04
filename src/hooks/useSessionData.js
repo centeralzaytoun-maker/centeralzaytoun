@@ -67,7 +67,7 @@ export const useSessionData = () => {
           monthly_courses, is_active, course_discounts, is_free
         `)
         .eq('center_id', centerId)
-        .eq('is_active', true)
+        // .eq('is_active', true) // ← تم التعليق لضمان ظهور الطلاب الجدد فوراً حتى لو لم يتم تفعيلهم
         .limit(5000); // Safety cap — no center has >5000 active students
 
       if (studentsError) throw studentsError;
