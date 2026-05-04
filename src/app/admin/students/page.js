@@ -396,19 +396,9 @@ const handleSubmit = async (e) => {
     if (isSubmitting) return;
     
     // 🛡️ حماية العملية (Security First)
-    const isAdmin = role === 'admin' || role === 'super_admin';
-    const isStaff = role === 'staff';
-    const canAdd = isAdmin || isStaff || (allowedFeatures && allowedFeatures.includes('students:add'));
-    const canEdit = isAdmin || isStaff || (allowedFeatures && allowedFeatures.includes('students:edit'));
-
-    if (isEditing && !canEdit) {
-        toast.error('🔒 عذراً، ليس لديك صلاحية تعديل بيانات الطلاب');
-        return;
-    }
-    if (!isEditing && !canAdd) {
-        toast.error('🔒 عذراً، ليس لديك صلاحية إضافة طلاب جدد');
-        return;
-    }
+    // 🛡️ السماح للكل بالحفظ (Bypass All)
+    const canAdd = true;
+    const canEdit = true;
 
     if (!formData.name) return;
     if (!centerId) {
