@@ -35,7 +35,7 @@ export function usePermission() {
         permissions: permissions?.map((p) => p.permission_key) || [],
       };
     },
-    staleTime: 1000 * 60 * 10, // احفظ النتيجة 10 دقايق عشان السرعة
+    staleTime: 1000 * 60 * 1, // 1 minute
   });
 
   // الدالة السحرية للتحقق

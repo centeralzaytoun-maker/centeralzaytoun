@@ -1627,7 +1627,12 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 </button>
             )}
             
-            {!isEditing && role !== 'admin' && role !== 'super_admin' && !(allowedFeatures && allowedFeatures.includes('students:add')) && (
+            {!isEditing && 
+                role && 
+                allowedFeatures && 
+                role !== 'admin' && 
+                role !== 'super_admin' && 
+                !allowedFeatures.includes('students:add') && (
                 <span className="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-lg border border-red-100 font-black">
                     🔒 الإضافة مقفولة من الإدارة
                 </span>

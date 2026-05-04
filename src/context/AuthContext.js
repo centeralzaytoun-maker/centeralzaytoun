@@ -25,7 +25,7 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
   const [session, setSession] = useState(null);
   const [centerId, setCenterId] = useState(initialCenterId || null);
   const [role, setRole] = useState(initialRole || null);
-  const [allowedFeatures, setAllowedFeatures] = useState(null); 
+  const [allowedFeatures, setAllowedFeatures] = useState([]); // Initialize as empty array to avoid null checks
   const [loading, setLoading] = useState(true); 
   const [isDeviceAuthorized, setIsDeviceAuthorized] = useState(true); // الحالة الافتراضية
   const isMounted = React.useRef(true); 
@@ -304,9 +304,9 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
                                 .eq('center_id', targetCid);
 
                             const specificPerms = staffPerms?.map(p => p.permission_key) || [];
-                            console.log(`🔐 Fetched ${specificPerms.length} specific permissions for staff ${targetUser.id}`);
-                            targetFeatures = [...new Set([...targetFeatures, ...specificPerms])];
-                            console.log(`📡 Combined Features:`, targetFeatures);
+                            const combined = [...new Set([...targetFeatures, ...specificPerms])];
+                            console.log(`🔐 Combined Features for staff ${targetUser.id}:`, combined);
+                            targetFeatures = combined;
                         }
                     }
                 } else {
