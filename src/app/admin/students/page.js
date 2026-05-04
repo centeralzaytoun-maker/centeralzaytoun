@@ -397,8 +397,9 @@ const handleSubmit = async (e) => {
     
     // 🛡️ حماية العملية (Security First)
     const isAdmin = role === 'admin' || role === 'super_admin';
-    const canAdd = isAdmin || (allowedFeatures && allowedFeatures.includes('students:add'));
-    const canEdit = isAdmin || (allowedFeatures && allowedFeatures.includes('students:edit'));
+    const isStaff = role === 'staff';
+    const canAdd = isAdmin || isStaff || (allowedFeatures && allowedFeatures.includes('students:add'));
+    const canEdit = isAdmin || isStaff || (allowedFeatures && allowedFeatures.includes('students:edit'));
 
     if (isEditing && !canEdit) {
         toast.error('🔒 عذراً، ليس لديك صلاحية تعديل بيانات الطلاب');
@@ -1632,6 +1633,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 allowedFeatures && 
                 role !== 'admin' && 
                 role !== 'super_admin' && 
+                role !== 'staff' && 
                 !allowedFeatures.includes('students:add') && (
                 <span className="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-lg border border-red-100 font-black">
                     🔒 الإضافة مقفولة من الإدارة
