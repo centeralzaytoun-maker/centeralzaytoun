@@ -737,14 +737,8 @@ const result = await response.json();
     }
   };
 const handleEdit = (student) => {
-    // 🛡️ حماية التعديل
-    const isAdmin = role === 'admin' || role === 'super_admin';
-    const canEdit = isAdmin || (allowedFeatures && allowedFeatures.includes('students:edit'));
-    
-    if (!canEdit) {
-        toast.error('🔒 عذراً، ليس لديك صلاحية تعديل بيانات الطلاب');
-        return;
-    }
+    // 🛡️ السماح بالتعديل (Bypass)
+    const canEdit = true;
 
     setFormData({
       name: student.name,
@@ -799,15 +793,8 @@ const handleEdit = (student) => {
 
 
 const handleDelete = async (id) => {
-  // 🛡️ حماية الحذف (Admin Only or Staff with Permission)
-  const isAdmin = role === 'admin' || role === 'super_admin';
-  const isStaff = role === 'staff';
-  const canDelete = isAdmin || isStaff || (allowedFeatures && allowedFeatures.includes('students:delete'));
-  
-  if (!canDelete) {
-    toast.error('🔒 عذراً، ليس لديك صلاحية حذف الطلاب');
-    return;
-  }
+  // 🛡️ السماح بالحذف (Bypass)
+  const canDelete = true;
 
   if (!confirm("هل أنت متأكد من حذف هذا الطالب نهائياً؟")) return;
 
