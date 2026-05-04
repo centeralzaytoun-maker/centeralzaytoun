@@ -856,25 +856,21 @@ const handleDelete = async (id) => {
     console.error("Audit log insert failed:", e);
   }
 
-  const { error } = await supabaseBrowser
-    .from('students')
-    .delete()
-    .eq('id', id);
+  try {
+    const res = await fetch(`/api/students?id=${id}`, {
+      method: 'DELETE'
+    });
 
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'فشل عملية الحذف');
+    }
 
-
-  if (!error) {
-
+    toast.success("✅ تم حذف الطالب وحسابه بنجاح");
     refetch(); // تحديث القائمة فوراً
-
-    // toast.success("تم الحذف بنجاح"); // (اختياري) لو بتستخدم مكتبة toast
-
-  } else {
-
-    alert("حدث خطأ أثناء الحذف");
-
-    console.error(error);
-
+  } catch (err) {
+    console.error("Delete error:", err);
+    toast.error(`❌ فشل الحذف: ${err.message}`);
   }
 
 };

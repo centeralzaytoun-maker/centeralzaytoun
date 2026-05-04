@@ -417,3 +417,40 @@ export async function PUT(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// 🗑️ دالة الحذف (DELETE) - تمسح الطالب من الداتابيز ومن الـ Auth
+export async function DELETE(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });
+    }
+
+    // 1. مسح المستخدم من Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+    
+    if (authError) {
+      console.warn('Auth user deletion warning (might not exist):', authError.message);
+      // لا نتوقف هنا، قد يكون الطالب موجوداً في الداتابيز فقط
+    }
+
+    // 2. مسح الطالب من جدول الطلاب
+    const { error: dbError } = await supabaseAdmin
+      .from('students')
+      .delete()
+      .eq('id', id);
+
+    if (dbError) throw dbError;
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('Delete student error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete student' },
+      { status: 500 }
+    );
+  }
+}
