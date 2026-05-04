@@ -297,15 +297,36 @@ export const AuthProvider = ({ children, initialUser = null, initialRole = null,
 
                         } else {
                             // 👤 موظف عادي (staff): فقط الصلاحيات المحددة له
-                            const { data: staffPerms } = await supabase
+                            console.log(`🔍 Fetching perms for staff ${targetUser.id} in center ${targetCid}`);
+                            let { data: staffPerms, error: permsError } = await supabase
                                 .from('staff_permissions')
                                 .select('permission_key')
                                 .eq('staff_id', targetUser.id)
                                 .eq('center_id', targetCid);
 
+                            if (permsError) {
+                                console.error('❌ Error fetching staff perms:', permsError);
+                            }
+
+                            // 🔄 Fallback: لو مفيش صلاحيات في السنتر ده، جرب هاتهم باليوزر آيدي بس (عشان لو في تضارب في السنتر آيدي)
+                            if ((!staffPerms || staffPerms.length === 0) && !permsError) {
+                                console.log(`⚠️ No perms found for staff in center ${targetCid}, attempting fallback fetch for user...`);
+                                const { data: fallbackPerms } = await supabase
+                                    .from('staff_permissions')
+                                    .select('permission_key')
+                                    .eq('staff_id', targetUser.id);
+                                
+                                if (fallbackPerms && fallbackPerms.length > 0) {
+                                    console.log(`✅ Fallback found ${fallbackPerms.length} perms for user!`);
+                                    staffPerms = fallbackPerms;
+                                }
+                            }
+
                             const specificPerms = staffPerms?.map(p => p.permission_key) || [];
+                            console.log(`🔐 Specific Perms found:`, specificPerms);
+                            
                             const combined = [...new Set([...targetFeatures, ...specificPerms])];
-                            console.log(`🔐 Combined Features for staff ${targetUser.id}:`, combined);
+                            console.log(`🔐 Final Combined Features for staff ${targetUser.id}:`, combined);
                             targetFeatures = combined;
                         }
                     }
