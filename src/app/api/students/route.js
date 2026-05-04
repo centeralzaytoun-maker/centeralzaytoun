@@ -196,7 +196,8 @@ export async function POST(req) {
             const centerPrefix = studentData.center_id.split('-')[0];
             const candidateEmail = `${candidateId.toLowerCase()}@${centerPrefix}.center.com`;
             
-            const { data: { user: existingAuth } } = await supabaseAdmin.auth.admin.getUserByEmail(candidateEmail);
+            const { data: { users: existingUsers } } = await supabaseAdmin.auth.admin.listUsers();
+            const existingAuth = existingUsers.find(u => u.email === candidateEmail);
 
             if (!existingAuth) {
                 uniqueId = candidateId;
