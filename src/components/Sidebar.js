@@ -90,7 +90,7 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     { id: 'finance_wallets', label: 'شحن المحافظ', href: '/admin/finance/wallets', icon: <FaWallet />, feature: 'page_finance_wallets' },
     { id: 'subscriptions', label: 'الاشتراكات الشهرية', href: '/admin/subscriptions', icon: <FaMoneyCheckAlt />, feature: 'page_subscriptions' }, 
     { id: 'lessons', label: 'المحتوى الرقمي', href: '/admin/lessons', icon: <FaChalkboardTeacher />, feature: 'page_lessons' }, 
-    { id: 'discussions', label: 'استفسارات الدروس', href: '/admin/discussions', icon: <FaQuestionCircle />, feature: 'page_courses' },
+    // { id: 'discussions', label: 'استفسارات الدروس', href: '/admin/discussions', icon: <FaQuestionCircle />, feature: 'page_courses' },
     { id: 'vouchers', label: 'أكواد الشحن', href: '/admin/vouchers', icon: <FaMoneyBillWave />, feature: 'page_vouchers' }, 
   ];
 
