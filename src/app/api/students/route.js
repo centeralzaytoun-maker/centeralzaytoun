@@ -179,9 +179,11 @@ export async function POST(req) {
     let codeToTry = Math.max(startNumber, maxExistingNumber + 1);
     let isUnique = false;
 
-    // Loop until we find a unique ID (حماية من الـ race conditions)
+    // Loop until we find a unique ID (حماية من الـ race conditions وتكرار الـ Auth)
     while (!isUnique) {
         const candidateId = prefix ? `${prefix}-${codeToTry}` : `${codeToTry}`;
+        
+        // 1. التأكد من عدم وجوده في جدول الطلاب
         const { data: existing } = await supabaseAdmin
             .from('students')
             .select('unique_id')
@@ -190,8 +192,20 @@ export async function POST(req) {
             .maybeSingle();
 
         if (!existing) {
-            uniqueId = candidateId;
-            isUnique = true;
+            // 2. التأكد من عدم وجوده في سجلات الـ Auth (Email Check)
+            const centerPrefix = studentData.center_id.split('-')[0];
+            const candidateEmail = `${candidateId.toLowerCase()}@${centerPrefix}.center.com`;
+            
+            const { data: { user: existingAuth } } = await supabaseAdmin.auth.admin.getUserByEmail(candidateEmail);
+
+            if (!existingAuth) {
+                uniqueId = candidateId;
+                isUnique = true;
+            } else {
+                console.log(`⚠️ Email ${candidateEmail} is already in Auth, skipping ID ${candidateId}`);
+                codeToTry++;
+                wasAdjusted = true;
+            }
         } else {
             codeToTry++;
             wasAdjusted = true;
