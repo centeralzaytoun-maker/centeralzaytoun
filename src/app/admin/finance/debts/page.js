@@ -36,9 +36,12 @@ export default function DebtsPage() {
   const [isFilterVisible, setIsFilterVisible] = useState(true);
 
   // 🛡️ Route Protection
+  const { role } = useAuth();
   const hasAccess = useMemo(() => {
-    return !authLoading && allowedFeatures?.includes('students:finance');
-  }, [authLoading, allowedFeatures]);
+    if (authLoading) return false;
+    if (role === 'admin' || role === 'super_admin' || role === 'staff') return true;
+    return allowedFeatures?.includes('students:finance');
+  }, [authLoading, allowedFeatures, role]);
 
   useEffect(() => {
     if (centerId) {
