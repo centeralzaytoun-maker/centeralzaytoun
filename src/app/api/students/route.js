@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '../../../lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 // Admin client for user creation
 const supabaseAdmin = createClient(
@@ -229,7 +230,7 @@ export async function POST(req) {
 
     // 🔒 تم إيقاف إنشاء حسابات المنصة (Auth Disabled by User Request)
     let authUser = null;
-    let finalStudentId = crypto.randomUUID();
+    let finalStudentId = randomUUID();
 
     /* 
     // Auth creation logic is now disabled
