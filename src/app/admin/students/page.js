@@ -635,27 +635,28 @@ const result = await response.json();
           });
         }
 
-        // 🚨 التعديل الجوهري هنا: تخصيص الرسالة بناءً على الصلاحية 🚨
-        if (hasPortalAccess) {
-            // الحالة 1: السنتر عنده صلاحية المنصة (Portal Access)
-            const successMessage = `✅ تم تسجيل الطالب وحسابه بنجاح!\n\n📋 بيانات الدخول:\n👤 الكود: ${serverUniqueId}\n🔑 كلمة السر: ${password}\n👨‍👩‍👧‍👦 كود ولي الأمر: ${serverAccessCode}\n\n💾 تم النسخ للحافظة!`;
-            
-            toast.success(successMessage, {
-              duration: 10000, 
-              position: 'top-center'
-            });
+        // 🚨 عرض بيانات الطالب المسجلة في رسالة النجاح 🚨
+        const studentInfoMessage = `✅ تم تسجيل بيانات الطالب بنجاح!
 
-            // نسخ البيانات للحافظة فقط في حالة وجود حساب
-            navigator.clipboard.writeText(
-              `👤 كود الطالب: ${serverUniqueId}\n🔑 كلمة السر: ${password}\n👨‍👩‍👧‍👦 كود ولي الأمر: ${serverAccessCode}`
-            );
-        } else {
-            // الحالة 2: السنتر معندوش صلاحية المنصة (بيانات فقط)
-            toast.success('✅ تم تسجيل بيانات الطالب بنجاح\n(تم الحفظ كبيانات فقط - الباقة لا تدعم حسابات المنصة 🔒)', {
-              duration: 5000,
-              position: 'top-center'
-            });
-        }
+كود الطالب: ${serverUniqueId}
+اسم الطالب: ${formData.name}
+رقم الأب: ${formData.parent_phone}
+رقم الأم: ${formData.mother_phone || '---'}
+الصف الدراسي: ${formData.grade}
+التخصص: ${formData.specialization || '---'}`;
+
+        toast.success(studentInfoMessage, {
+          duration: 12000, 
+          position: 'top-center',
+          style: {
+            textAlign: 'right',
+            direction: 'rtl',
+            minWidth: '350px'
+          }
+        });
+
+        // نسخ البيانات للحافظة
+        navigator.clipboard.writeText(studentInfoMessage);
         
         // إعادة ضبط الفورم وتحديث البيانات
         resetForm();

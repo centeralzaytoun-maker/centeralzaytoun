@@ -227,34 +227,17 @@ export async function POST(req) {
     const finalEmail = `${finalUniqueId.toLowerCase()}@${centerPrefix}.center.com`;
     const finalPassword = studentData.password || (studentData.phone || "12345678");
 
-    // 🔒 التحقق من صلاحية المنصة (Portal Access)
-    const { data: pkgData } = await supabaseAdmin
-      .from('centers')
-      .select('packages(features)')
-      .eq('id', studentData.center_id)
-      .single();
-    
-    const hasPortal = pkgData?.packages?.features?.includes('action_student_portal') || false;
+    // 🔒 تم إيقاف إنشاء حسابات المنصة (Auth Disabled by User Request)
     let authUser = null;
     let finalStudentId = crypto.randomUUID();
 
+    /* 
+    // Auth creation logic is now disabled
+    const hasPortal = ...
     if (hasPortal) {
-        // Create auth user ONLY if portal is enabled
-        const { data: newAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-          email: finalEmail,
-          password: finalPassword,
-          email_confirm: true,
-          user_metadata: { 
-            role: 'student', 
-            full_name: studentData.name,
-            unique_id: finalUniqueId
-          }
-        });
-
-        if (authError) throw authError;
-        authUser = newAuthUser;
-        finalStudentId = authUser.user.id;
+        ...
     }
+    */
 
     // Disable triggers temporarily
     await supabaseAdmin.rpc('exec', { sql: 'ALTER TABLE students DISABLE TRIGGER ALL;' });
@@ -388,33 +371,12 @@ export async function PUT(request) {
         }
     }
 
-    // 1. إذا كان التفعيل مطلوباً (Quick Add Activation)، ننشئ المستخدم في Supabase Auth
+    // 1. تم تعطيل إنشاء المستخدمين (Auth creation disabled)
+    /*
     if (create_auth_user && finalUniqueId && password) {
-      const centerIdForEmail = dataToUpdate.center_id || '';
-      const centerPrefix = centerIdForEmail.split('-')[0];
-      const finalEmail = `${finalUniqueId.toLowerCase()}@${centerPrefix}.center.com`;
-
-      // نتأكد الأول إن المستخدم مش موجود عشان ميديناش Error
-      const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const userExists = existingUsers.users.some(u => u.email === finalEmail);
-
-      if (!userExists) {
-          const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            id: id,
-            email: finalEmail,
-            password: password,
-            email_confirm: true,
-            user_metadata: { role: 'student', student_id: id, unique_id: finalUniqueId }
-          });
-
-          if (authError) {
-            console.error("Auth Error:", authError);
-            if (!authError.message.includes("already registered")) {
-                return NextResponse.json({ error: authError.message }, { status: 400 });
-            }
-          }
-      }
+       ...
     }
+    */
 
     // 2. تنظيف البيانات قبل تحديث الجدول
     const cleanData = { ...dataToUpdate };
