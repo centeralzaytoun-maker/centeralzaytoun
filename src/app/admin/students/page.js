@@ -2410,7 +2410,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                             ? 'bg-yellow-400 hover:bg-yellow-500 text-black' 
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'}`}
                 >
-                    <FaEdit /> تعديل {(role === 'staff' && !isStaff && !(allowedFeatures && allowedFeatures.includes('students:edit'))) && '🔒'}
+                    <FaEdit /> تعديل {(role === 'staff' && !(allowedFeatures && allowedFeatures.includes('students:edit'))) && '🔒'}
                 </button>
 
                 {/* 2. زر واتساب المباشر (محمي) */}
@@ -2517,7 +2517,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'}`}
                 >
-                  <FaTrash /> <span className="hidden sm:inline">حذف</span> {(role === 'staff' && !isStaff && !(allowedFeatures && allowedFeatures.includes('students:delete'))) && '🔒'}
+                  <FaTrash /> <span className="hidden sm:inline">حذف</span> {(role === 'staff' && !(allowedFeatures && allowedFeatures.includes('students:delete'))) && '🔒'}
                 </button>
             
             </div>
