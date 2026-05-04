@@ -811,7 +811,8 @@ const handleEdit = (student) => {
 const handleDelete = async (id) => {
   // 🛡️ حماية الحذف (Admin Only or Staff with Permission)
   const isAdmin = role === 'admin' || role === 'super_admin';
-  const canDelete = isAdmin || (allowedFeatures && allowedFeatures.includes('students:delete'));
+  const isStaff = role === 'staff';
+  const canDelete = isAdmin || isStaff || (allowedFeatures && allowedFeatures.includes('students:delete'));
   
   if (!canDelete) {
     toast.error('🔒 عذراً، ليس لديك صلاحية حذف الطلاب');
@@ -2405,11 +2406,11 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 <button 
                     onClick={() => handleEdit(student)} 
                     className={`flex items-center justify-center gap-1 px-3 md:px-4 py-2 min-h-[44px] rounded font-bold text-xs md:text-sm transition
-                        ${(role === 'admin' || role === 'super_admin' || (allowedFeatures && allowedFeatures.includes('students:edit'))) 
+                        ${(role === 'admin' || role === 'super_admin' || role === 'staff' || (allowedFeatures && allowedFeatures.includes('students:edit'))) 
                             ? 'bg-yellow-400 hover:bg-yellow-500 text-black' 
                             : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'}`}
                 >
-                    <FaEdit /> تعديل {(role === 'staff' && !(allowedFeatures && allowedFeatures.includes('students:edit'))) && '🔒'}
+                    <FaEdit /> تعديل {(role === 'staff' && !isStaff && !(allowedFeatures && allowedFeatures.includes('students:edit'))) && '🔒'}
                 </button>
 
                 {/* 2. زر واتساب المباشر (محمي) */}
@@ -2512,11 +2513,11 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 <button 
                   onClick={() => handleDelete(student.id)} 
                   className={`flex items-center justify-center gap-1 px-3 md:px-4 py-2 min-h-[44px] rounded font-bold text-xs md:text-sm transition
-                    ${(role === 'admin' || role === 'super_admin' || (allowedFeatures && allowedFeatures.includes('students:delete'))) 
+                    ${(role === 'admin' || role === 'super_admin' || role === 'staff' || (allowedFeatures && allowedFeatures.includes('students:delete'))) 
                       ? 'bg-red-500 hover:bg-red-600 text-white' 
                       : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'}`}
                 >
-                  <FaTrash /> <span className="hidden sm:inline">حذف</span> {(role === 'staff' && !(allowedFeatures && allowedFeatures.includes('students:delete'))) && '🔒'}
+                  <FaTrash /> <span className="hidden sm:inline">حذف</span> {(role === 'staff' && !isStaff && !(allowedFeatures && allowedFeatures.includes('students:delete'))) && '🔒'}
                 </button>
             
             </div>
