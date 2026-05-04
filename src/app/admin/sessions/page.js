@@ -314,7 +314,8 @@ export default function SessionsPage() {
     const { centerTotal, teacherTotal } = calculateShareDistribution(
       totalIncome, 
       attendeesCount, 
-      activeSession.fixed_share
+      activeSession.fixed_share,
+      attendanceHook.paymentsMap
     );
     return { count: attendeesCount, totalIncome, centerTotal, teacherTotal };
   }, [activeSession, attendanceHook.attendanceMap, attendanceHook.paymentsMap]);

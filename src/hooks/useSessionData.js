@@ -64,7 +64,7 @@ export const useSessionData = () => {
           id, name, unique_id, parent_phone, phone,
           enrolled_courses, group_ids, wallet_balance,
           subscription_type, free_courses, center_only_courses,
-          monthly_courses, is_active, course_discounts
+          monthly_courses, is_active, course_discounts, is_free
         `)
         .eq('center_id', centerId)
         .eq('is_active', true)

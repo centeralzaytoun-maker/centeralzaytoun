@@ -49,10 +49,18 @@ export const calculateTotalStudentDebt = (studentId, students, sessions, subscri
 export const getSessionDisplayStats = (session) => {
   const count = session.attendees?.length || 0;
   let income = 0;
+  let paidCount = 0;
+
   if (session.payments && typeof session.payments === 'object') {
-    income = Object.values(session.payments).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
+    const paymentValues = Object.values(session.payments);
+    income = paymentValues.reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
+    paidCount = paymentValues.filter(amount => parseFloat(amount) > 0).length;
   }
-  const center = count * (parseFloat(session.fixed_share) || 0);
+
+  // حصة السنتر تعتمد على عدد الذين دفعوا فعلياً مبلغاً أكبر من 0
+  const countForCenter = paidCount;
+  const center = countForCenter * (parseFloat(session.fixed_share) || 0);
+  
   const teacher = Math.max(0, income - center);
   return { count, totalIncome: income, centerTotal: center, teacherTotal: teacher };
 };
@@ -64,9 +72,19 @@ export const getSessionDisplayStats = (session) => {
  * @param {number} fixedShare - Fixed share per attendee for center
  * @returns {Object} Object with centerTotal and teacherTotal
  */
-export const calculateShareDistribution = (totalIncome, attendeeCount, fixedShare) => {
-  const centerTotal = attendeeCount * (parseFloat(fixedShare) || 0);
+export const calculateShareDistribution = (totalIncome, attendeeCount, fixedShare, sessionPayments = {}) => {
+  // حصة السنتر يجب أن تُحسب فقط بناءً على عدد الطلاب الذين سددوا مبلغاً فعلياً (أكبر من 0)
+  // هذا يمنع السنتر من أخذ نصيبه من طلاب لم يدفعوا بعد أو طلاب معفيين
+  const actualPaidCount = sessionPayments 
+    ? Object.values(sessionPayments).filter(amount => parseFloat(amount) > 0).length 
+    : 0;
+  
+  // نستخدم عدد الذين دفعوا فعلياً، وإذا لم يدفع أحد بعد (بداية الحصة) نضعها 0 لتجنب السالب
+  const countForCenter = actualPaidCount;
+
+  const centerTotal = countForCenter * (parseFloat(fixedShare) || 0);
   const teacherTotal = Math.max(0, totalIncome - centerTotal);
+  
   return { centerTotal, teacherTotal };
 };
 

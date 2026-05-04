@@ -23,6 +23,7 @@ export async function GET(req) {
     const search = searchParams.get('search') || '';
     const grade = searchParams.get('grade');
     const course = searchParams.get('course');
+    const isFree = searchParams.get('isFree');
     const centerId = searchParams.get('centerId');
 
     // التحقق من وجود centerId
@@ -55,6 +56,11 @@ export async function GET(req) {
   query = query.ilike('grade', `%${grade}%`);
 }
 
+
+    // 🎁 Free filter (Exempt students)
+    if (isFree === 'true') {
+      query = query.eq('is_free', true);
+    }
 
     // 📚 Course filter
     if (course) {
@@ -446,15 +452,20 @@ export async function DELETE(req) {
       return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });
     }
 
-    // 1. مسح المستخدم من Supabase Auth
+    // 1. مسح البيانات المرتبطة (لتجنب Foreign Key violation)
+    await supabaseAdmin.from('student_activities').delete().eq('student_id', id);
+    await supabaseAdmin.from('wallet_transactions').delete().eq('student_id', id);
+    await supabaseAdmin.from('exam_results').delete().eq('student_id', id);
+    await supabaseAdmin.from('subscriptions').delete().eq('student_id', id);
+
+    // 2. مسح المستخدم من Supabase Auth
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
     
     if (authError) {
       console.warn('Auth user deletion warning (might not exist):', authError.message);
-      // لا نتوقف هنا، قد يكون الطالب موجوداً في الداتابيز فقط
     }
 
-    // 2. مسح الطالب من جدول الطلاب
+    // 3. مسح الطالب من جدول الطلاب
     const { error: dbError } = await supabaseAdmin
       .from('students')
       .delete()

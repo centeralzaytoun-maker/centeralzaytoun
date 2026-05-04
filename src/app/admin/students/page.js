@@ -10,7 +10,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { 
   FaSearch, FaUserPlus, FaEdit, FaTrash, FaWhatsapp, FaEye, FaIdCard, 
   FaFilter, FaArrowRight, FaUserGraduate, FaLayerGroup, FaUsers, 
-  FaSave, FaPrint, FaFileExcel, FaPhoneAlt, FaCalendarAlt ,FaMobileAlt
+  FaSave, FaPrint, FaFileExcel, FaPhoneAlt, FaCalendarAlt ,FaMobileAlt,
+  FaGraduationCap
 } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
@@ -76,7 +77,7 @@ export default function StudentsPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
 
-  const [filterIncomplete, setFilterIncomplete] = useState(false);
+  const [filterExempt, setFilterExempt] = useState(false); // فلتر طلاب الحالات/الإعفاء
 
   const [filterGrade, setFilterGrade] = useState(''); 
 
@@ -110,7 +111,7 @@ export default function StudentsPage() {
     group_ids: {}, 
     has_wallet: false,
     is_free: false,
-    is_active: true,
+    is_active: false, // حساب الطالب معطل دائماً
     unique_id: '',
     free_courses: [],
     center_only_courses: [],
@@ -128,7 +129,7 @@ export default function StudentsPage() {
 
   const fetchStudents = async ({ queryKey }) => {
 
-    const [_key, { page, pageSize, search, grade, course }] = queryKey;
+    const [_key, { page, pageSize, search, grade, course, isExempt }] = queryKey;
 
     const params = new URLSearchParams({
       page,
@@ -136,6 +137,7 @@ export default function StudentsPage() {
       search,
       grade,
       course,
+      isFree: filterExempt,
       centerId: centerId,
     });
 
@@ -176,7 +178,7 @@ export default function StudentsPage() {
         grade: filterGrade,
 
         course: filterCourse,
-
+        isExempt: filterExempt,
       },
 
     ],
@@ -568,7 +570,7 @@ const handleSubmit = async (e) => {
         is_free: formData.is_free,
         wallet_balance: !formData.has_wallet ? null : (isEditing ? undefined : 0),
         has_wallet: formData.has_wallet,
-        is_active: formData.is_active ?? true,
+        is_active: false, // 🔴 حساب معطل دائماً بناءً على طلبك
         subscription_type: formData.subscription_type, // 🆕
         free_courses: formData.free_courses, // 🆕
         center_only_courses: formData.center_only_courses, // 🆕
@@ -754,7 +756,7 @@ const handleEdit = (student) => {
       enrollment_dates: student.enrollment_dates || {}, 
       has_wallet: student.has_wallet || false, 
       is_free: student.is_free || false,
-      is_active: student.is_active ?? true,
+      is_active: false, // 🔴 حساب معطل دائماً
       unique_id: student.unique_id,
       subscription_type: student.subscription_type || 'عادي',
       free_courses: student.free_courses || [],
@@ -1518,13 +1520,8 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
   const totalStudents = studentsData?.totalCount || 0;
 
   const filteredStudents = useMemo(() => {
-  let list = students;
-  // لو الفلتر شغال، اعرض بس اللي معندهمش رقم طالب أو رقم ولي أمر
-  if (filterIncomplete) {
-      list = list.filter(s => !s.phone || !s.parent_phone);
-  }
-  return list;
-}, [students, filterIncomplete]);
+    return students;
+  }, [students]);
 
   const loading = isLoading;
 
@@ -1756,6 +1753,8 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     >
                         <option value="" className="text-gray-900">عام (بدون تخصص)</option>
                         <option value="بكالوريا" className="text-gray-900">بكالوريا</option>
+                        <option value="ازهر" className="text-gray-900">ازهر علمي</option>
+                        <option value="ازهر ادبي" className="text-gray-900">ازهر ادبي</option>
                         <option value="علمي علوم" className="text-gray-900">علمي علوم</option>
                         <option value="علمي رياضة" className="text-gray-900">علمي رياضة</option>
                         <option value="أدبي" className="text-gray-900">أدبي</option>
@@ -1924,7 +1923,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
 
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mt-4">
 
-                <label className="flex items-center gap-2 cursor-pointer bg-green-50 px-3 md:px-4 py-2.5 md:py-2 rounded-lg border border-green-200 hover:bg-green-100 transition min-h-[44px]">
+                {/* <label className="flex items-center gap-2 cursor-pointer bg-green-50 px-3 md:px-4 py-2.5 md:py-2 rounded-lg border border-green-200 hover:bg-green-100 transition min-h-[44px]">
 
                     <input 
 
@@ -1939,6 +1938,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     <span className="font-bold text-green-800 text-sm md:text-base">✅ تفعيل المحفظة المالية</span>
 
                 </label>
+                */}
 
                 <label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 md:px-4 py-2.5 md:py-2 rounded-lg border border-red-200 hover:bg-red-100 transition min-h-[44px]">
 
@@ -1959,20 +1959,6 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                <div className="flex-1 flex items-center gap-2 bg-gray-50 p-3 rounded-lg border min-h-[44px]">
-                    <label className="flex items-center gap-2 cursor-pointer w-full">
-                        <input 
-                            type="checkbox" 
-                            checked={!!formData.is_active}
-                            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                            className="w-5 h-5 accent-blue-600"
-                        />
-                        <span className={`font-bold ${formData.is_active ? 'text-blue-700' : 'text-gray-500'}`}>
-                            {formData.is_active ? '🔵 حساب الطالب مفعل' : '⚪ حساب معطل'}
-                        </span>
-                    </label>
-                </div>
-
                 {centerType === 'instructor' && (
                     <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100 min-h-[44px]">
                         <span className="text-sm font-black text-blue-800 flex items-center gap-2">
@@ -2077,6 +2063,19 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                 <span className="hidden sm:inline">تصدير Excel</span>
                 <span className="sm:hidden">Excel</span>
                 {!allowedFeatures?.includes('action_export_reports') && '🔒'}
+            </button>
+            
+            {/* 🎓 فلتر طلاب الحالات (الإعفاء النهائي) */}
+            <button 
+                onClick={() => setFilterExempt(!filterExempt)}
+                className={`mt-2 md:mt-0 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition shadow-md border-2
+                    ${filterExempt 
+                        ? 'bg-red-600 text-white border-red-700' 
+                        : 'bg-white text-red-600 border-red-100 hover:bg-red-50'}`}
+            >
+                <FaGraduationCap className={filterExempt ? "text-white" : "text-red-600"} /> 
+                <span>طلاب الحالات</span>
+                {filterExempt && <span className="bg-white text-red-600 text-[10px] px-1.5 py-0.5 rounded-full">مفعل</span>}
             </button>
           </div>
 
@@ -2246,7 +2245,33 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                         <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-[10px] md:text-xs font-black border border-blue-100">
                             كود ولي الأمر: {student.access_code || '---'}
                         </span>
-                        {student.is_free && <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-lg font-black shadow-sm">إعفاء كلي 🎓</span>}
+                        {student.is_free ? (
+                            <button 
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm("هل تريد إلغاء حالة الإعفاء الكامل عن هذا الطالب؟")) {
+                                        const { error } = await supabaseBrowser.from('students').update({ is_free: false }).eq('id', student.id);
+                                        if (!error) refetch();
+                                    }
+                                }}
+                                className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-lg font-black shadow-sm hover:bg-red-600 transition flex items-center gap-1 animate-pulse"
+                            >
+                                إعفاء كلي 🎓 (إلغاء؟)
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm("هل تريد تحويل هذا الطالب إلى (طالب حالة - إعفاء كلي)؟ لن يتم تحصيل أي رسوم منه تلقائياً.")) {
+                                        const { error } = await supabaseBrowser.from('students').update({ is_free: true }).eq('id', student.id);
+                                        if (!error) refetch();
+                                    }
+                                }}
+                                className="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-lg font-black border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition"
+                            >
+                                تفعيل إعفاء كلي
+                            </button>
+                        )}
                         {student.has_wallet && (
                             <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-lg font-black shadow-sm flex items-center gap-1">
                                 محفظة: {student.wallet_balance || 0} ج.م
@@ -2439,7 +2464,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     <span className="text-[10px] font-bold hidden sm:inline">إرسال التقرير</span>
                 </button>
 
-                {/* 5. زر إرسال بيانات الدخول (محمي) */}
+            {/* 5. زر إرسال بيانات الدخول (محمي) 
                 <button 
                     onClick={() => {
                         if (!allowedFeatures?.includes('action_student_portal')) return toast.error('🔒 المنصة التعليمية غير مفعلة');
@@ -2455,7 +2480,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                     <span className="text-[10px] font-bold hidden sm:inline">بيانات الدخول {allowedFeatures?.includes('action_student_portal') ? '' : '🔒'}</span>
                 </button>
 
-                {/* 5.1. زر إعادة ضبط الجهاز (جديد) */}
+                {/* 5.1. زر إعادة ضبط الجهاز (جديد) 
                 <button 
                     onClick={() => {
                         if (!allowedFeatures?.includes('action_student_portal')) return toast.error('🔒 المنصة التعليمية غير مفعلة');
