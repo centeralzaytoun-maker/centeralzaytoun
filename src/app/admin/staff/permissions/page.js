@@ -222,14 +222,37 @@ export default function StaffPermissionsPage() {
           </div>
           
           {selectedStaffId && (
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="w-full md:w-auto flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-blue-100 transition-all disabled:opacity-50 active:scale-95 text-sm md:text-base mb-2 md:mb-0"
-            >
-              {saveMutation.isPending ? <Loader2 className="animate-spin h-5 w-5" /> : <Save className="h-5 w-5" />}
-              <span>تحديث الصلاحيات</span>
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              {/* Grant All Button */}
+              <button
+                onClick={() => {
+                  const allKeys = Object.values(groupedPermissions).flat().map(p => p.key);
+                  setLocalPermissions(allKeys);
+                }}
+                className="flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-100 px-6 py-4 rounded-2xl font-black text-xs md:text-sm hover:bg-emerald-100 transition-all active:scale-95"
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>منح الكل</span>
+              </button>
+
+              {/* Clear All Button */}
+              <button
+                onClick={() => setLocalPermissions([])}
+                className="flex items-center justify-center gap-2 bg-red-50 text-red-700 border border-red-100 px-6 py-4 rounded-2xl font-black text-xs md:text-sm hover:bg-red-100 transition-all active:scale-95"
+              >
+                <X className="h-4 w-4" />
+                <span>إلغاء الكل</span>
+              </button>
+
+              <button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-blue-100 transition-all disabled:opacity-50 active:scale-95 text-sm md:text-base"
+              >
+                {saveMutation.isPending ? <Loader2 className="animate-spin h-5 w-5" /> : <Save className="h-5 w-5" />}
+                <span>تحديث الصلاحيات</span>
+              </button>
+            </div>
           )}
         </div>
 

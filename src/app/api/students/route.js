@@ -220,19 +220,34 @@ export async function POST(req) {
     const finalEmail = `${finalUniqueId.toLowerCase()}@${centerPrefix}.center.com`;
     const finalPassword = studentData.password || (studentData.phone || "12345678");
 
-    // Create auth user first
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: finalEmail,
-      password: finalPassword,
-      email_confirm: true,
-      user_metadata: { 
-        role: 'student', 
-        full_name: studentData.name,
-        unique_id: finalUniqueId
-      }
-    });
+    // 🔒 التحقق من صلاحية المنصة (Portal Access)
+    const { data: pkgData } = await supabaseAdmin
+      .from('centers')
+      .select('packages(features)')
+      .eq('id', studentData.center_id)
+      .single();
+    
+    const hasPortal = pkgData?.packages?.features?.includes('action_student_portal') || false;
+    let authUser = null;
+    let finalStudentId = crypto.randomUUID();
 
-    if (authError) throw authError;
+    if (hasPortal) {
+        // Create auth user ONLY if portal is enabled
+        const { data: newAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: finalEmail,
+          password: finalPassword,
+          email_confirm: true,
+          user_metadata: { 
+            role: 'student', 
+            full_name: studentData.name,
+            unique_id: finalUniqueId
+          }
+        });
+
+        if (authError) throw authError;
+        authUser = newAuthUser;
+        finalStudentId = authUser.user.id;
+    }
 
     // Disable triggers temporarily
     await supabaseAdmin.rpc('exec', { sql: 'ALTER TABLE students DISABLE TRIGGER ALL;' });
@@ -256,7 +271,7 @@ export async function POST(req) {
       wallet_balance: studentData.has_wallet ? 0 : null,
       has_wallet: studentData.has_wallet || false,
       max_devices: studentData.max_devices || 1,        // ✅ عدد الأجهزة
-      id: authUser.user.id,
+      id: finalStudentId,
       unique_id: uniqueId,
       access_code: studentData.access_code,
       subscription_type: studentData.subscription_type || 'عادي',
@@ -274,8 +289,10 @@ export async function POST(req) {
     await supabaseAdmin.rpc('exec', { sql: 'ALTER TABLE students ENABLE TRIGGER ALL;' });
 
     if (error) {
-      // Cleanup auth user if DB insert fails
-      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      // Cleanup auth user if DB insert fails and auth user was created
+      if (authUser?.user?.id) {
+        await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      }
       throw error;
     }
 
