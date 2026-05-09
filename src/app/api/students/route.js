@@ -268,7 +268,8 @@ export async function POST(req) {
       subscription_type: studentData.subscription_type || 'عادي',
       monthly_courses: studentData.monthly_courses || [],
       free_courses: studentData.free_courses || [],
-      center_only_courses: studentData.center_only_courses || []
+      center_only_courses: studentData.center_only_courses || [],
+      added_by: studentData.added_by // ✅ تسجيل اسم الموظف
     };
 
     const { data, error } = await supabaseAdmin
@@ -384,6 +385,10 @@ export async function PUT(request) {
     // لو عندنا unique_id جديد، نحدثه في الجدول
     if (finalUniqueId) {
         cleanData.unique_id = finalUniqueId;
+    }
+
+    if (body.added_by) {
+        cleanData.added_by = body.added_by;
     }
     
     // 3. تحديث بيانات الطالب في الجدول
