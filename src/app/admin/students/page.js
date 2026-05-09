@@ -1433,15 +1433,11 @@ const handlePrintList = () => {
                 
 
                 <div class="footer">
-
                     <strong>${centerConfig?.center_name || 'السنتر التعليمي'}</strong><br>
-
                     ${centerConfig?.address || ''}<br>
-
-                     ${centerConfig?.center_phone || '-'}<br>
-
-                    <em>تم استخراج التقرير آلياً من النظام في ${dateStr} - الساعة ${timeStr}</em>
-
+                    ${centerConfig?.center_phone || '-'}<br>
+                    <em>تم استخراج التقرير بواسطة: ${user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'}</em><br>
+                    <em>تاريخ الاستخراج: ${dateStr} - الساعة ${timeStr}</em>
                 </div>
 
             </body>
