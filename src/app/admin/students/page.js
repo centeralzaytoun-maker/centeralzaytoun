@@ -1753,6 +1753,10 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                         className="w-full p-3 min-h-[44px] border-2 border-gray-300 rounded-lg mb-4 bg-white focus:ring-2 focus:ring-blue-500 text-sm md:text-base text-gray-900 appearance-none opacity-100" 
                     >
                         <option value="" className="text-gray-900">عام (بدون تخصص)</option>
+                        <option value="بكالوريا لغات" className="text-gray-900">بكالوريا لغات</option>
+                        <option value="علمي رياضه لغات" className="text-gray-900">علمي رياضه لغات</option>
+                        <option value="علمي علوم لغات" className="text-gray-900">علمي علوم لغات</option>
+                        <option value="ادبي لغات" className="text-gray-900">ادبي لغات</option>
                         <option value="بكالوريا" className="text-gray-900">بكالوريا</option>
                         <option value="ازهر" className="text-gray-900">ازهر علمي</option>
                         <option value="ازهر ادبي" className="text-gray-900">ازهر ادبي</option>

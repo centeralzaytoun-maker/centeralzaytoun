@@ -162,7 +162,18 @@ export async function DELETE(request) {
 
     if (!userId) throw new Error("رقم المستخدم مطلوب");
 
-    // حذف من Auth (وهيتحذف تلقائياً من Profiles بسبب الـ CASCADE اللي عملناه في SQL)
+    // 1. تنظيف البيانات المرتبطة التي قد تمنع الحذف (Foreign Key Constraints)
+    // حذف الجداول الخاصة بالموظف
+    await supabaseAdmin.from('staff_schedules').delete().eq('staff_id', userId);
+    await supabaseAdmin.from('staff_attendance').delete().eq('staff_id', userId);
+    await supabaseAdmin.from('staff_permissions').delete().eq('staff_id', userId);
+    
+    // تحديث السجلات المالية والإدارية (اجعلها مجهولة المصدر بدلاً من حذفها للحفاظ على التقارير)
+    await supabaseAdmin.from('expenses').update({ created_by: null }).eq('created_by', userId);
+    await supabaseAdmin.from('store_returns').update({ created_by: null }).eq('created_by', userId);
+    await supabaseAdmin.from('audit_logs').update({ user_id: null }).eq('user_id', userId);
+
+    // 2. حذف من Auth (وهيتحذف تلقائياً من Profiles بسبب الـ CASCADE)
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (error) throw error;
