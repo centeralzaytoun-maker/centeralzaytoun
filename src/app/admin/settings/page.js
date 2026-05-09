@@ -43,7 +43,8 @@ export default function SettingsPage() {
     paymob_iframe_id: '',
     paymob_hmac_secret: '',
     support_phone: '',
-    whatsapp_number: ''
+    whatsapp_number: '',
+    specializations: []
   });
 
   // 🎭 Identity Mode State
@@ -82,6 +83,7 @@ export default function SettingsPage() {
   // ✅ FIX: Controlled states for Room inputs
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState('');
+  const [newSpecialization, setNewSpecialization] = useState('');
 
   // ── UI State ──
   const [saving, setSaving] = useState(false);
@@ -139,7 +141,8 @@ export default function SettingsPage() {
             paymob_iframe_id: settingsData.paymob_iframe_id || '',
             paymob_hmac_secret: settingsData.paymob_hmac_secret || '',
             support_phone: settingsData.support_phone || '',
-            whatsapp_number: settingsData.whatsapp_number || ''
+            whatsapp_number: settingsData.whatsapp_number || '',
+            specializations: settingsData.specializations || []
           });
           // 🎭 Identity Mode
           setInstructorFields({
@@ -248,6 +251,7 @@ export default function SettingsPage() {
         paymob_hmac_secret: settings.paymob_hmac_secret,
         support_phone: settings.support_phone,
         whatsapp_number: settings.whatsapp_number,
+        specializations: settings.specializations || []
       }, { onConflict: 'center_id' });
 
     if (error) {
@@ -1325,6 +1329,77 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* 🟠 SPECIALIZATIONS CARD */}
+        <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+          <div className="bg-gradient-to-l from-orange-50/50 to-white px-6 md:px-8 py-5 md:py-6 border-b border-slate-50 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-100">
+                <FaLayerGroup className="text-white text-lg md:text-xl" />
+              </div>
+              <div>
+                <h2 className="font-black text-slate-800 text-base md:text-lg">تخصصات الطلاب (الشعبة)</h2>
+                <p className="text-[10px] md:text-[11px] text-slate-400 font-bold">إدارة التخصصات المتاحة للتسجيل</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl font-black">{(settings.specializations || []).length} تخصص</span>
+          </div>
+
+          <div className="p-6 md:p-8 space-y-6 flex-1">
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 space-y-4">
+               <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSpecialization}
+                    onChange={(e) => setNewSpecialization(e.target.value)}
+                    placeholder="مثلاً: علمي رياضة"
+                    className="flex-1 p-4 bg-white border-2 border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-orange-50 focus:border-orange-500 font-black text-sm transition-all"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!newSpecialization.trim()) return;
+                      if (settings.specializations?.includes(newSpecialization.trim())) return alert('هذا التخصص موجود بالفعل');
+                      setSettings({ ...settings, specializations: [...(settings.specializations || []), newSpecialization.trim()] });
+                      setNewSpecialization('');
+                    }}
+                    className="bg-orange-600 text-white px-6 py-4 rounded-2xl font-black hover:bg-orange-700 transition active:scale-95 shadow-lg shadow-orange-100 flex items-center gap-2"
+                  >
+                    <FaPlus /> إضافة
+                  </button>
+               </div>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+              {(settings.specializations || []).map((spec, i) => (
+                <div key={i} className="flex items-center justify-between p-4 bg-white border border-slate-50 rounded-2xl hover:border-orange-200 hover:shadow-md transition group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-8 h-8 bg-orange-50 text-orange-600 rounded-lg flex items-center justify-center font-black text-xs">
+                      {i + 1}
+                    </div>
+                    <span className="font-black text-slate-700 text-sm">{spec}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSettings({ ...settings, specializations: settings.specializations.filter((_, idx) => idx !== i) });
+                    }}
+                    className="text-slate-200 hover:text-red-500 p-2 transition-all md:opacity-0 md:group-hover:opacity-100"
+                  >
+                    <FaTrash size={14} />
+                  </button>
+                </div>
+              ))}
+              {(!settings.specializations || settings.specializations.length === 0) && (
+                <div className="text-center py-10 opacity-30">
+                  <FaLayerGroup className="text-slate-300 text-4xl mx-auto mb-3" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">لا يوجد تخصصات مخصصة</p>
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold px-2 italic">
+              * في حالة عدم إضافة أي تخصص، سيظهر النظام القائمة الافتراضية (علمي، أدبي، إلخ).
+            </p>
           </div>
         </div>
 

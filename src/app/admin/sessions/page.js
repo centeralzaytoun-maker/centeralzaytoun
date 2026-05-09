@@ -401,7 +401,8 @@ export default function SessionsPage() {
       if (process.env.NODE_ENV !== 'production') {
         console.error('Error creating session:', error);
       }
-      alert('حدث خطأ أثناء الاتصال بقاعدة البيانات');
+      const errorMsg = error?.message || 'حدث خطأ أثناء الاتصال بقاعدة البيانات';
+      alert(`خطأ: ${errorMsg}`);
     } finally {
       setIsCreatingSession(false);
     }

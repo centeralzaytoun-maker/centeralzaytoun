@@ -63,6 +63,7 @@ export default function StudentsPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStaffName, setCurrentStaffName] = useState(null); // 🆕 لحفظ اسم الموظف الحالي
+  const [specializations, setSpecializations] = useState([]); // 🆕 التخصصات من الإعدادات
 
   
 
@@ -227,7 +228,7 @@ export default function StudentsPage() {
         //   whatsapp_template → handleSendReport message template
         supabaseBrowser
           .from('center_settings')
-          .select('primary_color, center_name, logo_url, whatsapp_template')
+          .select('primary_color, center_name, logo_url, whatsapp_template, specializations')
           .eq('center_id', centerId)
           .maybeSingle(),
 
@@ -243,7 +244,10 @@ export default function StudentsPage() {
       setCourses(coursesData || []);
       setGroups(groupsData || []);
       setStages(stagesData || []);
-      if (configData) setCenterConfig(configData);
+      if (configData) {
+        setCenterConfig(configData);
+        if (configData.specializations) setSpecializations(configData.specializations);
+      }
       if (centerData?.center_type) setCenterType(centerData.center_type);
 
       // 🆕 جلب اسم الموظف الحالي (عشان يتسجل في added_by)
@@ -1763,16 +1767,24 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                         className="w-full p-3 min-h-[44px] border-2 border-gray-300 rounded-lg mb-4 bg-white focus:ring-2 focus:ring-blue-500 text-sm md:text-base text-gray-900 appearance-none opacity-100" 
                     >
                         <option value="" className="text-gray-900">عام (بدون تخصص)</option>
-                        <option value="بكالوريا لغات" className="text-gray-900">بكالوريا لغات</option>
-                        <option value="علمي رياضه لغات" className="text-gray-900">علمي رياضه لغات</option>
-                        <option value="علمي علوم لغات" className="text-gray-900">علمي علوم لغات</option>
-                        <option value="ادبي لغات" className="text-gray-900">ادبي لغات</option>
-                        <option value="بكالوريا" className="text-gray-900">بكالوريا</option>
-                        <option value="ازهر" className="text-gray-900">ازهر علمي</option>
-                        <option value="ازهر ادبي" className="text-gray-900">ازهر ادبي</option>
-                        <option value="علمي علوم" className="text-gray-900">علمي علوم</option>
-                        <option value="علمي رياضة" className="text-gray-900">علمي رياضة</option>
-                        <option value="أدبي" className="text-gray-900">أدبي</option>
+                        {specializations.length > 0 ? (
+                            specializations.map((spec, i) => (
+                                <option key={i} value={spec} className="text-gray-900">{spec}</option>
+                            ))
+                        ) : (
+                            <>
+                                <option value="بكالوريا لغات" className="text-gray-900">بكالوريا لغات</option>
+                                <option value="علمي رياضه لغات" className="text-gray-900">علمي رياضه لغات</option>
+                                <option value="علمي علوم لغات" className="text-gray-900">علمي علوم لغات</option>
+                                <option value="ادبي لغات" className="text-gray-900">ادبي لغات</option>
+                                <option value="بكالوريا" className="text-gray-900">بكالوريا</option>
+                                <option value="ازهر" className="text-gray-900">ازهر علمي</option>
+                                <option value="ازهر ادبي" className="text-gray-900">ازهر ادبي</option>
+                                <option value="علمي علوم" className="text-gray-900">علمي علوم</option>
+                                <option value="علمي رياضة" className="text-gray-900">علمي رياضة</option>
+                                <option value="أدبي" className="text-gray-900">أدبي</option>
+                            </>
+                        )}
                     </select>
                 </div>
             </div>
