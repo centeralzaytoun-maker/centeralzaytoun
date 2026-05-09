@@ -11,7 +11,7 @@ import {
   FaSearch, FaUserPlus, FaEdit, FaTrash, FaWhatsapp, FaEye, FaIdCard, 
   FaFilter, FaArrowRight, FaUserGraduate, FaLayerGroup, FaUsers, 
   FaSave, FaPrint, FaFileExcel, FaPhoneAlt, FaCalendarAlt ,FaMobileAlt,
-  FaGraduationCap
+  FaGraduationCap,FaUser
 } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
@@ -62,6 +62,7 @@ export default function StudentsPage() {
   const [centerType, setCenterType] = useState('center'); // 🎭
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentStaffName, setCurrentStaffName] = useState(null); // 🆕 لحفظ اسم الموظف الحالي
 
   
 
@@ -245,6 +246,15 @@ export default function StudentsPage() {
       if (configData) setCenterConfig(configData);
       if (centerData?.center_type) setCenterType(centerData.center_type);
 
+      // 🆕 جلب اسم الموظف الحالي (عشان يتسجل في added_by)
+      if (user?.id) {
+          const { data: staffProfile } = await supabaseBrowser
+            .from('staff_profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (staffProfile?.full_name) setCurrentStaffName(staffProfile.full_name);
+      }
     } catch (error) {
       console.error('Error:', error);
       toast.error('حدث خطأ في تحميل البيانات');
@@ -576,7 +586,7 @@ const handleSubmit = async (e) => {
         center_only_courses: formData.center_only_courses, // 🆕
         monthly_courses: formData.monthly_courses || [], // 🆕 لحفظ الاشتراك الشهري للمواد
         max_devices: formData.max_devices || 1, // 📱 حفظ عدد الأجهزة
-        added_by: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'
+        added_by: currentStaffName || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'
       };
 
       // 🔒 قفل البيزنس: هل السنتر يمتلك صلاحية المنصة؟
@@ -2344,7 +2354,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                            </div>
                            <div className="flex flex-col">
                               <span className="text-[10px] text-gray-400 font-bold">أضيف بواسطة</span>
-                              <span className="font-bold text-gray-800 text-[11px]">{student.added_by || 'نظام آلي'}</span>
+                              <span className="font-bold text-gray-800 text-[11px]">{student.added_by || '---'}</span>
                            </div>
                         </div>
                     </div>
