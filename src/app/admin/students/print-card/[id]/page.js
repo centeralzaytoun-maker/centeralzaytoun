@@ -177,11 +177,11 @@ export default function PrintCardPage() {
 
                         <div className="flex-1 flex flex-col items-center justify-center border-r border-dashed border-gray-200 pl-1 h-full bg-gray-50/50">
                             <p className="text-[10px] font-black text-blue-600 mb-2 uppercase">بوابة الطالب</p>
-                            <div className="p-1.5 bg-white border border-blue-50 rounded-xl shadow-sm rotate-90 scale-125">
+                            <div className="p-1 bg-white border border-blue-50 rounded-lg shadow-sm w-[120px]">
                                 <img 
                                     src={`https://barcode.tec-it.com/barcode.ashx?data=${student.unique_id}&code=Code128&translate-esc=true`} 
                                     alt="Barcode"
-                                    className="h-14 w-auto object-contain"
+                                    className="h-10 w-full object-contain"
                                 />
                                 <p className="text-[7px] font-mono text-center font-black text-gray-500 mt-1">{student.unique_id}</p>
                             </div>
