@@ -575,7 +575,8 @@ const handleSubmit = async (e) => {
         free_courses: formData.free_courses, // 🆕
         center_only_courses: formData.center_only_courses, // 🆕
         monthly_courses: formData.monthly_courses || [], // 🆕 لحفظ الاشتراك الشهري للمواد
-        max_devices: formData.max_devices || 1 // 📱 حفظ عدد الأجهزة
+        max_devices: formData.max_devices || 1, // 📱 حفظ عدد الأجهزة
+        added_by: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'
       };
 
       // 🔒 قفل البيزنس: هل السنتر يمتلك صلاحية المنصة؟
@@ -606,8 +607,7 @@ const handleSubmit = async (e) => {
             ...dataToSave,
             grade_prefix: gradePrefix, // 🎯 بادئة الصف (الـ API يستخدمها بدل البادئة العامة)
             access_code: accessCode,
-            password: password,
-            created_by_name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'
+            password: password
           })
         });
 
@@ -2335,11 +2335,16 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                            <div className="flex flex-col">
                               <span className="text-[10px] text-gray-400 font-bold">تاريخ التسجيل</span>
                               <span className="font-bold text-gray-800">{student.created_at ? new Date(student.created_at).toLocaleDateString('ar-EG') : '---'}</span>
-                              {student.created_by_name && (
-                                  <span className="text-[10px] bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
-                                      بواسطة: {student.created_by_name}
-                                  </span>
-                              )}
+                           </div>
+                        </div>
+                        <div className="hidden md:block w-px h-8 bg-gray-200"></div>
+                        <div className="flex items-center gap-2">
+                           <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-400 shadow-sm border border-blue-50">
+                              <FaUser size={12} />
+                           </div>
+                           <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 font-bold">أضيف بواسطة</span>
+                              <span className="font-bold text-gray-800 text-[11px]">{student.added_by || 'نظام آلي'}</span>
                            </div>
                         </div>
                     </div>

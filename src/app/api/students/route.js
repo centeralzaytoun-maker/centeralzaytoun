@@ -268,8 +268,7 @@ export async function POST(req) {
       subscription_type: studentData.subscription_type || 'عادي',
       monthly_courses: studentData.monthly_courses || [],
       free_courses: studentData.free_courses || [],
-      center_only_courses: studentData.center_only_courses || [],
-      created_by_name: studentData.created_by_name || null
+      center_only_courses: studentData.center_only_courses || []
     };
 
     const { data, error } = await supabaseAdmin
