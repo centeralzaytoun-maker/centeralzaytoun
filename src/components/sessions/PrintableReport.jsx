@@ -13,6 +13,7 @@ export const PrintableReport = ({
     courses,
     students,
     availableGrades,
+    user
 }) => {
     // 1. حالة الفلاتر المحلية
     const [modalFilterGrade, setModalFilterGrade] = useState('');
@@ -234,7 +235,9 @@ export const PrintableReport = ({
                         )}
                         <h1 className="text-2xl sm:text-4xl font-black text-blue-900 mb-1 tracking-tighter">{centerConfig?.center_name || "SMART CENTER"}</h1>
                         <p className="text-gray-500 font-bold text-sm sm:text-lg">{reportData.title}</p>
-                        <p className="text-gray-400 text-sm italic">مستخرج بتاريخ {reportData.date}</p>
+                        <p className="text-gray-400 text-sm italic">
+                            مستخرج بتاريخ {reportData.date} بواسطة {user?.user_metadata?.full_name || user?.user_metadata?.name || 'المسؤول'}
+                        </p>
                     </div>
 
                     {/* كروت الإحصائيات */}

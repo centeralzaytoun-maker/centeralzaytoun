@@ -198,7 +198,7 @@ export default function SessionsPage() {
   // =============================================================================
   // 2. USER ROLE FETCHING (استخدام الـ context)
   // =============================================================================
-  const { centerId, role: authRole, loading: authLoading, allowedFeatures } = useAuth(); // ← استخدام centerId و role من الـ context
+  const { centerId, role: authRole, loading: authLoading, allowedFeatures, user } = useAuth(); // ← استخدام centerId و role من الـ context
   
   // 🛡️ Route Protection
   useEffect(() => {
@@ -375,7 +375,8 @@ export default function SessionsPage() {
           attendees: [], 
           payments: {}, 
           is_completed: false,
-          center_id: centerId
+          center_id: centerId,
+          created_by: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'
         }])
         .select();
 
@@ -900,6 +901,7 @@ export default function SessionsPage() {
             });
             return calculateRequiredPayment(student, session, !!activeSub);
           }}
+          user={user}
         />
       )}
 
@@ -917,6 +919,7 @@ export default function SessionsPage() {
         availableGrades={availableGrades || []}
         courses={courses || []}
         students={students || []}
+        user={user}
       />
 
      

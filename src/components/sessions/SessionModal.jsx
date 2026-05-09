@@ -52,7 +52,8 @@ export const SessionModal = ({
   calculateRequiredPayment,
   isSavingLedger,
   isEndingSession,
-  subscriptions // 🆕 تزويد الاشتراكات
+  subscriptions, // 🆕 تزويد الاشتراكات
+  user
 }) => {
 
   // 🆕 Debug props
@@ -1442,6 +1443,7 @@ export const SessionModal = ({
 
         <div className="grid grid-cols-2 gap-y-3 mb-6 text-base font-bold text-gray-800">
           <p><span>التاريخ:</span> {new Date(activeSession.created_at).toLocaleDateString('ar-EG')}</p>
+          <p><span>المسؤول:</span> {user?.user_metadata?.full_name || user?.user_metadata?.name || 'المسؤول'}</p>
           <p><span>المدرس:</span> {course?.instructors?.name || course?.instructor || '---'}</p>
           <p><span>المادة:</span> {course?.name || '---'}</p>
           <p><span>المجموعة:</span> {group?.name || '---'}</p>
@@ -1528,6 +1530,7 @@ export const SessionModal = ({
         <span style={{ background: (centerConfig?.primary_color || '#2563eb') + '10' }}>📅 التاريخ: {new Date(activeSession.created_at).toLocaleDateString('ar-EG')}</span>
         <span style={{ background: (centerConfig?.primary_color || '#2563eb') + '10' }}>👥 الحضور: {enhancedFilteredStudents.filter(s => attendanceMap[s.id]).length} طالب</span>
         <span style={{ background: (centerConfig?.primary_color || '#2563eb') + '10' }}>💰 المحصل: {enhancedFilteredStudents.reduce((sum, s) => sum + (parseFloat(paymentsMap[s.id]) || 0), 0).toFixed(2)} ج</span>
+        <span style={{ background: (centerConfig?.primary_color || '#2563eb') + '10' }}>👤 بواسطة: {user?.user_metadata?.full_name || user?.user_metadata?.name || 'المسؤول'}</span>
       </div>
 
       <table>

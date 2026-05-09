@@ -59,7 +59,7 @@ export const SessionCard = ({
 
           {isCompleted && <span className="mr-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded border border-gray-300 font-bold">منتهية 🔒</span>}
         </h3>
-        <p className="text-gray-500 text-sm">👨‍🏫 {course?.instructors?.name || course?.instructor || 'غير معروف'} | 📅 {new Date(session.created_at).toLocaleDateString('ar-EG')}</p>
+        <p className="text-gray-500 text-sm">👨‍🏫 {course?.instructors?.name || course?.instructor || 'غير معروف'} | 📅 {new Date(session.created_at).toLocaleDateString('ar-EG')} | 👤 بواسطة: {session.created_by || '---'}</p>
       </div>
 
       <div className="flex gap-2 flex-wrap justify-center">
