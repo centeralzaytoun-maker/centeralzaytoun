@@ -973,6 +973,7 @@ const handleResetDevice = async (id, name) => {
               return disc > 0 ? `${course?.name}: ${disc}ج` : null;
           }).filter(Boolean).join(' | ') || 'لا يوجد' : '-',
           'البريد الإلكتروني': student.email || `${student.unique_id}@center.com`,
+          'أضيف بواسطة': student.added_by || '-',
           'الملاحظات': student.notes || '-',
           'رابط تقرير المتابعة': `${baseUrl}/portal/report/${student.unique_id}`
         };
@@ -1409,7 +1410,8 @@ const handlePrintList = () => {
 
                             <th style="width: 20%">رقم الطالب</th>
 
-                            <th style="width: 20%">ولي الأمر</th>
+                            <th style="width: 15%">ولي الأمر</th>
+                            <th style="width: 15%">أضيف بواسطة</th>
 
                         </tr>
 
@@ -1432,6 +1434,7 @@ const handlePrintList = () => {
                                 <td>${s.phone || '-'}</td>
 
                                 <td style="direction: ltr; font-family: monospace;">${s.parent_phone || '-'}</td>
+                                <td style="font-weight: bold; color: #64748b;">${s.added_by || '-'}</td>
 
                             </tr>
 
