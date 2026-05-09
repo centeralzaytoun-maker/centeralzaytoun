@@ -48,6 +48,9 @@ export default function PrintCardPage() {
     // تشغيل الطباعة تلقائياً عند جاهزية البيانات
     useEffect(() => {
         if (student) {
+            // تحديث عنوان الصفحة ليكون اسم الطالب (هذا يحدد اسم ملف الـ PDF عند الحفظ)
+            document.title = `${student.name} - كارنيه الطالب`;
+            
             const timer = setTimeout(() => {
                 handlePrint();
             }, 1000);

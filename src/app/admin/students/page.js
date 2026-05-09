@@ -297,11 +297,11 @@ export default function StudentsPage() {
         });
 
         setTimeout(() => {
-
+            const originalTitle = document.title;
+            document.title = `${printStudent.name} - كارنيه الطالب`;
             window.print();
-
+            document.title = originalTitle;
             setPrintStudent(null);
-
         }, 500);
 
       } catch (e) { console.error(e); }

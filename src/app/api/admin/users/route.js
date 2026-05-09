@@ -168,19 +168,31 @@ export async function DELETE(request) {
     await supabaseAdmin.from('staff_attendance').delete().eq('staff_id', userId);
     await supabaseAdmin.from('staff_permissions').delete().eq('staff_id', userId);
     
-    // تحديث السجلات المالية والإدارية (اجعلها مجهولة المصدر بدلاً من حذفها للحفاظ على التقارير)
+    // تحديث السجلات لتصبح مجهولة المصدر (SET NULL) بدلاً من الحذف للحفاظ على سلامة البيانات التاريخية
     await supabaseAdmin.from('expenses').update({ created_by: null }).eq('created_by', userId);
     await supabaseAdmin.from('store_returns').update({ created_by: null }).eq('created_by', userId);
     await supabaseAdmin.from('audit_logs').update({ user_id: null }).eq('user_id', userId);
+    await supabaseAdmin.from('system_logs').update({ admin_id: null }).eq('admin_id', userId);
+    await supabaseAdmin.from('universal_inbox').update({ assigned_to: null }).eq('assigned_to', userId);
+    await supabaseAdmin.from('centers').update({ owner_id: null }).eq('owner_id', userId);
 
-    // 2. حذف من Auth (وهيتحذف تلقائياً من Profiles بسبب الـ CASCADE)
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    // 2. محاولة حذف البروفايل يدوياً أولاً لمعرفة الجدول الذي يمنع الحذف (في حال وجود FK غير معروف)
+    const { error: profileError } = await supabaseAdmin.from('staff_profiles').delete().eq('id', userId);
+    if (profileError) throw profileError;
 
-    if (error) throw error;
+    // 3. حذف من Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authError) throw authError;
 
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error('❌ Error deleting user:', error);
+    return NextResponse.json({ 
+      error: error.message, 
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    }, { status: 400 });
   }
 }
