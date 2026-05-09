@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { FaChalkboardTeacher, FaCheckCircle, FaPhoneAlt, FaHeadset, FaUser, FaUserGraduate } from 'react-icons/fa';
 
 export default function PrintCardPage() {
@@ -156,15 +155,6 @@ export default function PrintCardPage() {
                                 <div className="flex items-center gap-2 text-blue-700 font-bold text-[11px] mb-2">
                                     <FaCheckCircle size={8} /> الصف: {student.grade}
                                 </div>
-                                
-                                <div className="bg-white p-1 border border-gray-100 rounded shadow-sm inline-block">
-                                    <img 
-                                        src={`https://barcode.tec-it.com/barcode.ashx?data=${student.unique_id}&code=Code128&translate-esc=true`} 
-                                        alt="Barcode"
-                                        className="h-9 w-auto object-contain"
-                                    />
-                                    <p className="text-[8px] font-mono text-center font-bold text-gray-400 mt-0.5">{student.unique_id}</p>
-                                </div>
                             </div>
 
                             <div className="space-y-0.5 bg-gray-50/90 p-2 rounded-xl border border-gray-100 mb-1">
@@ -185,14 +175,15 @@ export default function PrintCardPage() {
                             </div>
                         </div>
 
-                        <div className="flex-1 flex flex-col items-center justify-center border-r border-dashed border-gray-200 pl-1 h-full">
-                            <p className="text-[10px] font-black text-blue-600 mb-1 uppercase">بوابة الطالب</p>
-                            <div className="p-1.5 bg-white border border-blue-50 rounded-xl shadow-sm">
-                                <QRCodeSVG 
-                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/students/${student.unique_id}`} 
-                                    size={80} 
-                                    level={"H"} 
+                        <div className="flex-1 flex flex-col items-center justify-center border-r border-dashed border-gray-200 pl-1 h-full bg-gray-50/50">
+                            <p className="text-[10px] font-black text-blue-600 mb-2 uppercase">بوابة الطالب</p>
+                            <div className="p-1.5 bg-white border border-blue-50 rounded-xl shadow-sm rotate-90 scale-125">
+                                <img 
+                                    src={`https://barcode.tec-it.com/barcode.ashx?data=${student.unique_id}&code=Code128&translate-esc=true`} 
+                                    alt="Barcode"
+                                    className="h-14 w-auto object-contain"
                                 />
+                                <p className="text-[7px] font-mono text-center font-black text-gray-500 mt-1">{student.unique_id}</p>
                             </div>
                         </div>
                     </div>
