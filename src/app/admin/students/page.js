@@ -606,7 +606,8 @@ const handleSubmit = async (e) => {
             ...dataToSave,
             grade_prefix: gradePrefix, // 🎯 بادئة الصف (الـ API يستخدمها بدل البادئة العامة)
             access_code: accessCode,
-            password: password
+            password: password,
+            created_by_name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'المسؤول'
           })
         });
 
@@ -2334,6 +2335,11 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
                            <div className="flex flex-col">
                               <span className="text-[10px] text-gray-400 font-bold">تاريخ التسجيل</span>
                               <span className="font-bold text-gray-800">{student.created_at ? new Date(student.created_at).toLocaleDateString('ar-EG') : '---'}</span>
+                              {student.created_by_name && (
+                                  <span className="text-[10px] bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
+                                      بواسطة: {student.created_by_name}
+                                  </span>
+                              )}
                            </div>
                         </div>
                     </div>
