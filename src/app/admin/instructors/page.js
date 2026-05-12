@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
+import StaffPageGuard from '../../../components/StaffPageGuard';
 
 export default function InstructorsPage() {
   const { centerId, allowedFeatures, loading: authLoading } = useAuth(); // ← استخراج centerId من الـ context
@@ -225,7 +226,8 @@ export default function InstructorsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto mb-20 md:mb-0 space-y-6 md:space-y-8" dir="rtl">
+    <StaffPageGuard requiredPermission="page_instructors">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto mb-20 md:mb-0 space-y-6 md:space-y-8" dir="rtl">
       <Toaster position="top-center" />
 
       {/* Header Section */}
@@ -506,6 +508,7 @@ export default function InstructorsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </StaffPageGuard>
   );
 }

@@ -5,15 +5,7 @@ import { Save, User, Shield, CheckCircle, AlertCircle, Loader2, X } from 'lucide
 import { useAuth } from '../../../../context/AuthContext';
 
 export default function StaffPermissionsPage() {
-  const { centerId, allowedFeatures, role } = useAuth();
-
-  // Restrict access to Super Admin and Admin only
-  useEffect(() => {
-    if (role && role !== 'super_admin' && role !== 'admin') {
-      window.location.href = '/admin/dashboard';
-      return;
-    }
-  }, [role]);
+  const { centerId, allowedFeatures } = useAuth();
 
   useEffect(() => {
     if (!centerId) {
@@ -31,32 +23,11 @@ export default function StaffPermissionsPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['staff-permissions', centerId],
     queryFn: async () => {
-      console.log('🔍 Frontend Debug - centerId:', centerId);
-      console.log('🔍 Frontend Debug - centerId type:', typeof centerId);
-      
-      if (!centerId) {
-        console.log('❌ Frontend Debug - No centerId available');
-        return null;
-      }
+      if (!centerId) return null;
 
       const res = await fetch(`/api/staff-permissions?center_id=${centerId}`);
-      console.log('🔍 Frontend Debug - API response status:', res.status);
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.log('❌ Frontend Debug - API error:', errorText);
-        throw new Error('فشل في جلب البيانات');
-      }
-      
-      const jsonData = await res.json();
-      console.log('🔍 Frontend Debug - API response:', {
-        staffCount: jsonData.staff?.length || 0,
-        permissionsCount: jsonData.permissions?.length || 0,
-        staffPermissionsCount: jsonData.staffPermissions?.length || 0,
-        staffSample: jsonData.staff?.slice(0, 2)
-      });
-      
-      return jsonData;
+      if (!res.ok) throw new Error('فشل في جلب البيانات');
+      return res.json();
     },
     enabled: !!centerId,
   });
@@ -64,16 +35,75 @@ export default function StaffPermissionsPage() {
   const groupedPermissions = useMemo(() => {
     if (!data?.permissions) return {};
 
-    // فقط صلاحيات الوصول للصفحات
-    const pagePermissions = data.permissions.filter(perm => {
-      // فقط الصلاحيات التي تبدأ بـ page_ ومفعلة في الباقة
-      return perm.key.startsWith('page_') && allowedFeatures?.includes(perm.key);
-    });
-
-    // تجميع كل صلاحيات الصفحات تحت مجموعة واحدة
-    return {
-      '� الوصول للصفحات والمصادر': pagePermissions
+    const groupTitles = {
+      page: '🚪 الوصول للصفحات والمصادر',
+      students: '👥 شؤون الطلاب',
+      academic: '📖 الأكاديمية والحصص',
+      store: '📦 المخزن والمتجر',
+      finance: '💰 الحسابات والمالية',
+      wallet: '💳 المحفظة الإلكترونية',
+      expenses: '💸 المصروفات',
+      staff: '🛡️ الموارد البشرية',
+      settings: '⚙️ إعدادات النظام',
+      logs: '📜 سجلات المراقبة',
+      notifications: '📢 التنبيهات والبث',
+      subscriptions: '🎫 الاشتراكات'
     };
+
+    return data.permissions
+      .filter(perm => {
+        // 🛡️ فلترة الصلاحيات بناءً على باقة السنتر
+        const isPage = perm.key.startsWith('page_');
+        if (isPage) return allowedFeatures?.includes(perm.key);
+
+        const packageMapping = {
+          'students:view': 'page_students',
+          'students:finance': 'page_students',
+          'academic:sessions': 'page_sessions',
+          'academic:schedule': 'page_schedule',
+          'academic:exams': 'page_exams',
+          'store:sales': 'page_store',
+          'finance:reports': 'page_finance_reports',
+          'wallet:view': 'page_finance_wallets',
+          'expenses:view': 'page_finance_expenses',
+          'staff:view': 'page_staff_permissions',
+          'logs:view': 'page_audit',
+          'page_notifications': 'page_notifications',
+          'page_subscriptions': 'page_subscriptions'
+        };
+
+        const requiredModule = packageMapping[perm.key];
+        if (requiredModule) return allowedFeatures?.includes(requiredModule);
+
+        // لو صلاحية مش في لستة الربط، بنجرب نفحص بالبريفكس (عشان الـ Actions)
+        const prefix = perm.key.split(':')[0];
+        const prefixMapping = {
+          'students': 'page_students',
+          'academic': 'page_sessions', // ديفولت لو مش محدد مديول محدد
+          'store': 'page_store',
+          'finance': 'page_finance_reports',
+          'wallet': 'page_finance_wallets',
+          'expenses': 'page_finance_expenses',
+          'staff': 'page_staff_permissions',
+          'logs': 'page_audit'
+        };
+        const fallbackModule = prefixMapping[prefix];
+        if (fallbackModule) return allowedFeatures?.includes(fallbackModule);
+
+        return true;
+      })
+      .reduce((groups, perm) => {
+        // 🕵️ تمييز الصفحات عن العمليات
+        const isPage = perm.key.startsWith('page_');
+        const groupKey = isPage ? 'page' : perm.key.split(':')[0]; 
+        const title = groupTitles[groupKey] || groupKey.toUpperCase(); 
+
+        if (!groups[title]) {
+          groups[title] = [];
+        }
+        groups[title].push(perm);
+        return groups;
+      }, {});
   }, [data?.permissions, allowedFeatures]);
 
   useEffect(() => {

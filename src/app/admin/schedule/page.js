@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { supabaseBrowser } from '../../../lib/supabase';
 import { FaClock, FaDoorOpen, FaPlus, FaTrash, FaCalendarAlt, FaCalendarPlus, FaGraduationCap, FaBookOpen, FaUsers, FaEdit, FaSync, FaTimes } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
+import StaffPageGuard from '../../../components/StaffPageGuard';
 
 function SchedulePage() {
   const { centerId, user } = useAuth(); // ← استخراج centerId من الـ context
@@ -363,7 +364,8 @@ function SchedulePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto mb-20 md:mb-0" dir="rtl">
+    <StaffPageGuard requiredPermission="page_schedule">
+      <div className="p-4 md:p-8 max-w-[1600px] mx-auto mb-20 md:mb-0" dir="rtl">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8 md:mb-12">
         <div className="text-center md:text-right w-full md:w-auto">
@@ -796,7 +798,8 @@ function SchedulePage() {
           </form>
         </div>
       )}
-    </div>
+      </div>
+    </StaffPageGuard>
   );
 }
 

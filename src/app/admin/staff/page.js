@@ -56,10 +56,20 @@ export default function StaffPage() {
 
   const fetchStaff = async () => {
     if (!centerId) return;
+    console.log('🔍 Staff Page Debug - centerId:', centerId);
+    console.log('🔍 Staff Page Debug - centerId type:', typeof centerId);
+    
     try {
       const { data, error } = await supabaseBrowser
         .from('staff_profiles').select('*')
         .eq('center_id', centerId).order('created_at', { ascending: false });
+      
+      console.log('🔍 Staff Page Debug - Query result:', {
+        count: data?.length || 0,
+        error: error?.message,
+        data: data?.slice(0, 2)
+      });
+      
       if (error) throw error;
       setStaff(data);
     } catch (e) {

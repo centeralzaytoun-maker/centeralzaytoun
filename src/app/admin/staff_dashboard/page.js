@@ -14,6 +14,7 @@ import { useAuth } from '../../../context/AuthContext';
 // 🚀 Dynamic Import for better LCP
 const DailyReportModal = dynamic(() => import('../../../components/DailyReportModal'), { ssr: false });
 import AccessDenied from '../../../components/AccessDenied';
+import StaffPageGuard from '../../../components/StaffPageGuard';
 
 // ══════════════════════════════════════════════════════════════
 // StaffDashboard — Fully Responsive Premium UI
@@ -581,7 +582,8 @@ export default function StaffDashboard() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6 md:space-y-10 animate-in fade-in duration-700 min-h-screen bg-slate-50/50 pb-24 md:pb-12" dir="rtl">
+    <StaffPageGuard requiredPermission="page_staff_dashboard">
+      <div className="p-4 md:p-8 space-y-6 md:space-y-10 animate-in fade-in duration-700 min-h-screen bg-slate-50/50 pb-24 md:pb-12" dir="rtl">
       
       {/* ── HEADER & WELCOME BANNER ── */}
       <div className="relative overflow-hidden bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-sm border border-slate-100 group">
@@ -1100,6 +1102,7 @@ export default function StaffDashboard() {
           logoUrl={centerSettings?.logo_url}
         />
       )}
-    </div>
+      </div>
+    </StaffPageGuard>
   );
 }

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase-browser'; // تأكد من المسار حسب مشروعك
 import { FaBook, FaChalkboardTeacher, FaMoneyBillWave, FaEdit, FaTrash, FaLayerGroup, FaPlus, FaLock, FaImage, FaUpload, FaSync } from 'react-icons/fa';
 import { useAuth } from '../../../context/AuthContext'; // ← استخدام الـ context للحصول على centerId
+import StaffPageGuard from '../../../components/StaffPageGuard';
 
 export default function CoursesPage() {
   const { centerId, user, allowedFeatures, loading: authLoading } = useAuth(); // ← استخراج centerId من الـ context
@@ -338,7 +339,8 @@ const fetchStages = async () => {
   const canSubmit = isEditing ? canEdit : canAdd;
 
   return (
-    <div className="max-w-6xl mx-auto p-2 sm:p-4 md:p-8" dir="rtl">
+    <StaffPageGuard requiredPermission="page_courses">
+      <div className="max-w-6xl mx-auto p-2 sm:p-4 md:p-8" dir="rtl">
       
       {/* Header */}
       <div className="text-center mb-6 md:mb-10">
@@ -700,6 +702,7 @@ const fetchStages = async () => {
             )}
         </div>
       )}
-    </div>
+      </div>
+    </StaffPageGuard>
   );
 }

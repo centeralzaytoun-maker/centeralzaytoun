@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../context/AuthContext';
+import StaffPageGuard from '../../../components/StaffPageGuard';
 import { FaPlus, FaUsers, FaBookOpen, FaTrash, FaUserTie, FaGraduationCap, FaEdit, FaSave, FaTimes, FaLock } from 'react-icons/fa';
 
 export default function GroupManager() {
@@ -188,7 +189,8 @@ export default function GroupManager() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto mb-20 md:mb-0" dir="rtl">
+    <StaffPageGuard requiredPermission="page_groups">
+      <div className="p-4 md:p-8 max-w-7xl mx-auto mb-20 md:mb-0" dir="rtl">
       {/* Header Section */}
       <h2 className="text-2xl md:text-3xl font-black mb-6 md:mb-10 flex items-center gap-3 text-gray-800">
         <FaUsers className="text-blue-600 shrink-0" /> <span className="truncate text-xl md:text-3xl">إدارة المجموعات الدراسية</span>
@@ -391,5 +393,6 @@ export default function GroupManager() {
         )}
       </div>
     </div>
-  );
+  </StaffPageGuard>
+);
 }

@@ -16,6 +16,7 @@ import {
 import * as XLSX from 'xlsx';
 
 import Link from 'next/link';
+import StaffPageGuard from '../../../components/StaffPageGuard';
 
 import JsBarcode from 'jsbarcode';
 
@@ -1543,8 +1544,8 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
 
 
   return (
-
-    <div className="max-w-6xl mx-auto p-3 md:p-4 lg:p-8">
+    <StaffPageGuard requiredPermission="page_students">
+      <div className="max-w-6xl mx-auto p-3 md:p-4 lg:p-8">
 
       
 
@@ -2572,7 +2573,8 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
 
       <Toaster position="top-center" reverseOrder={false} />
 
-    </div>
+      </div>
+    </StaffPageGuard>
 
   );
 

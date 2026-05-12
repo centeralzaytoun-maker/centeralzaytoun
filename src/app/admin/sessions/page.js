@@ -28,6 +28,7 @@ import { SessionsHeader } from '../../../components/sessions/SessionsHeader';
 import { CreateSessionForm } from '../../../components/sessions/CreateSessionForm';
 import { SessionCard } from '../../../components/sessions/SessionCard';
 import { SessionModal } from '../../../components/sessions/SessionModal';
+import StaffPageGuard from '../../../components/StaffPageGuard';
 import { PrintableReport } from '../../../components/sessions/PrintableReport';
 
 export default function SessionsPage() {
@@ -734,7 +735,8 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 bg-gray-50 min-h-screen relative">
+    <StaffPageGuard requiredPermission="page_sessions">
+      <div className="max-w-7xl mx-auto p-4 bg-gray-50 min-h-screen relative">
       
 
       
@@ -950,6 +952,7 @@ export default function SessionsPage() {
           font-size: 1.1rem; 
         }
       `}</style>
-    </div>
+      </div>
+    </StaffPageGuard>
   );
 }

@@ -19,8 +19,9 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   
-  const { allowedFeatures, loading, centerId } = useAuth(); 
+  const { allowedFeatures, loading, centerId, user } = useAuth(); 
   const [inquiryCount, setInquiryCount] = useState(0);
+  const [staffPermissions, setStaffPermissions] = useState([]);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -71,6 +72,32 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     };
   }, [centerId]);
 
+  // 📋 Fetch staff permissions for sidebar visibility
+  useEffect(() => {
+    const fetchStaffPermissions = async () => {
+      if (!centerId || !user || userRole === 'admin' || userRole === 'super_admin') {
+        setStaffPermissions([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/staff-permissions?center_id=${centerId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const userPerms = data.staffPermissions
+            .filter(p => p.staff_id === user.id)
+            .map(p => p.permission_key);
+          setStaffPermissions(userPerms);
+          console.log('🔍 Sidebar Debug - Staff permissions:', userPerms);
+        }
+      } catch (error) {
+        console.error('Error fetching staff permissions:', error);
+      }
+    };
+
+    fetchStaffPermissions();
+  }, [centerId, user, userRole]);
+
   const toggleSidebar = () => setIsOpen(!isOpen);
   const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
 
@@ -110,24 +137,43 @@ export default function Sidebar({ userRole = 'staff', primaryColor = '#2563eb', 
     return menuItems.filter(item => {
       if (!item.feature) return true; 
 
-      // الـ Super Admin يرى كل شيء
+      // الـ Super Admin يرى كل شيء ويتحكم في كل شيء
       if (userRole === 'super_admin') return true;
 
-      // لو السنتر معاه الميزة واليوزر معاه الصلاحية
-      return allowedFeatures?.includes(item.feature);
+      // الـ Admin يرى فقط الصفحات التي يسمح بها Super Admin
+      if (userRole === 'admin') {
+        // Admin يرى الصفحات بناءً على ميزات السنتر فقط (بدون صلاحيات staff)
+        return allowedFeatures?.includes(item.feature);
+      }
+
+      // للـ Staff: تحقق من الصلاحيات الفردية + ميزات السنتر
+      const hasCenterFeature = allowedFeatures?.includes(item.feature);
+      const hasStaffPermission = staffPermissions.includes(item.feature);
+      
+      return hasCenterFeature && hasStaffPermission;
     });
-  }, [allowedFeatures, userRole]);
+  }, [allowedFeatures, userRole, staffPermissions]);
 
   const visibleAdminItems = useMemo(() => {
     return adminItems.filter(item => {
       if (!item.feature) return true; 
 
-      // الـ Super Admin يرى كل شيء
+      // الـ Super Admin يرى كل شيء ويتحكم في كل شيء
       if (userRole === 'super_admin') return true;
 
-      return allowedFeatures?.includes(item.feature);
+      // الـ Admin يرى فقط الصفحات التي يسمح بها Super Admin
+      if (userRole === 'admin') {
+        // Admin يرى الصفحات بناءً على ميزات السنتر فقط (بدون صلاحيات staff)
+        return allowedFeatures?.includes(item.feature);
+      }
+
+      // للـ Staff: تحقق من الصلاحيات الفردية + ميزات السنتر
+      const hasCenterFeature = allowedFeatures?.includes(item.feature);
+      const hasStaffPermission = staffPermissions.includes(item.feature);
+      
+      return hasCenterFeature && hasStaffPermission;
     });
-  }, [allowedFeatures, userRole]);
+  }, [allowedFeatures, userRole, staffPermissions]);
 
   if (loading || allowedFeatures === null) {
     return (

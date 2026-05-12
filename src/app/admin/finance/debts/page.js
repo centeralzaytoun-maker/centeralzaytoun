@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../../../context/AuthContext';
+import StaffPageGuard from '../../../../components/StaffPageGuard';
 import { calculateRequiredPayment } from '../../../../utils/sessionCalculations';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
@@ -235,7 +236,8 @@ export default function DebtsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-cairo pb-10" dir="rtl">
+    <StaffPageGuard requiredPermission="page_finance_debts">
+      <div className="min-h-screen bg-[#f8fafc] font-cairo pb-10" dir="rtl">
       <Toaster position="top-center" />
 
       {/* 🏔️ Header Section */}
@@ -503,7 +505,8 @@ export default function DebtsPage() {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
-    </div>
+      </div>
+    </StaffPageGuard>
   );
 }
 

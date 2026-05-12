@@ -1,15 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Create server-side client for API routes
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  }
-});
+import { supabase } from '../../../lib/supabase'; // Use existing supabase client
 
 export async function GET(req) {
   try {
@@ -20,20 +10,12 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Center ID is required' }, { status: 400 });
     }
 
-    console.log('🔍 API Debug - centerId:', centerId);
-
     // جلب البيانات بالتوازي مع الفلترة حسب المركز
     const [staffResult, permissionsResult, staffPermissionsResult] = await Promise.all([
-      supabase.from('staff_profiles').select('*').eq('center_id', centerId).order('created_at', { ascending: false }),
-      supabase.from('permissions').select('key, name'), 
+      supabase.from('staff_profiles').select('id, full_name, role').eq('center_id', centerId),
+      supabase.from('permissions').select('key, name, description'), 
       supabase.from('staff_permissions').select('staff_id, permission_key').eq('center_id', centerId)
     ]);
-
-    console.log('🔍 API Debug - Staff query result:', {
-      count: staffResult.data?.length || 0,
-      error: staffResult.error,
-      data: staffResult.data?.slice(0, 2) // Show first 2 staff members for debugging
-    });
 
     if (staffResult.error) throw new Error(`Staff Error: ${staffResult.error.message}`);
     if (permissionsResult.error) throw new Error(`Permissions Error: ${permissionsResult.error.message}`);
@@ -46,12 +28,8 @@ export async function GET(req) {
     });
 
   } catch (error) {
-    console.error('API Error:', error);
-    console.error('Stack:', error.stack);
-    return NextResponse.json({ 
-      error: 'Internal server error',
-      details: error.message 
-    }, { status: 500 });
+    console.error('API Error:', error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -78,7 +56,8 @@ export async function POST(req) {
       const rows = permissions.map(key => ({
         staff_id,
         permission_key: key,
-        center_id // التأكيد على المركز
+        center_id, // التأكيد على المركز
+        allowed: true
       }));
 
       const { error: insError } = await supabase
@@ -91,11 +70,7 @@ export async function POST(req) {
     return NextResponse.json({ success: true, message: 'تم تحديث الصلاحيات بنجاح' });
 
   } catch (e) {
-    console.error('Update Permissions Error:', e);
-    console.error('Stack:', e.stack);
-    return NextResponse.json({ 
-      error: 'Failed to update permissions',
-      details: e.message 
-    }, { status: 500 });
+    console.error('Update Permissions Error:', e.message);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
