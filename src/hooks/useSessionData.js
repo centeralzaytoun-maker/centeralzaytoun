@@ -54,38 +54,76 @@ export const useSessionData = () => {
         sessionsQuery = sessionsQuery.range(from, to);
       }
 
-      // ✅ PERFORMANCE FIX: Replaced the RAM-bomb while-loop.
-      // Old code: SELECT * on all students in batches → 50MB+ RAM, 10+ round-trips.
-      // New code: ONE query, only the 13 columns the session modal actually uses,
-      //           filtered to active students only (inactive don't attend sessions).
-      const { data: studentsData, error: studentsError } = await supabase
-        .from('students')
-        .select(`
-          id, name, unique_id, parent_phone, phone,
-          enrolled_courses, group_ids, wallet_balance,
-          subscription_type, free_courses, center_only_courses,
-          monthly_courses, is_active, course_discounts, is_free
-        `)
-        .eq('center_id', centerId)
-        // .eq('is_active', true) // ← تم التعليق لضمان ظهور الطلاب الجدد فوراً حتى لو لم يتم تفعيلهم
-        .limit(5000); // Safety cap — no center has >5000 active students
+      // ✅ PERFORMANCE FIX: We keep the column projection to save RAM,
+      // but we MUST fetch in batches because Supabase limits max_rows to 1000 by default.
+      let allStudents = [];
+      let fetchMore = true;
+      let fromIdx = 0;
+      const step = 1000;
+      
+      while (fetchMore) {
+        const { data: batch, error: studentsError } = await supabase
+          .from('students')
+          .select(`
+            id, name, unique_id, parent_phone, phone,
+            enrolled_courses, group_ids, wallet_balance,
+            subscription_type, free_courses, center_only_courses,
+            monthly_courses, is_active, course_discounts, is_free
+          `)
+          .eq('center_id', centerId)
+          .range(fromIdx, fromIdx + step - 1);
 
-      if (studentsError) throw studentsError;
-      const allStudents = studentsData || [];
+        if (studentsError) throw studentsError;
+        
+        if (batch && batch.length > 0) {
+          allStudents = allStudents.concat(batch);
+          if (batch.length < step) {
+            fetchMore = false;
+          } else {
+            fromIdx += step;
+          }
+        } else {
+          fetchMore = false;
+        }
+      }
 
-      const [sRes, cRes, gRes, exRes, subRes] = await Promise.all([
+      const [sRes, cRes, gRes, exRes] = await Promise.all([
         sessionsQuery,
         supabase.from('courses').select(`*, instructors (id, name)`).eq('center_id', centerId),
         supabase.from('groups').select('*, schedule(*)').eq('center_id', centerId),
-        supabase.from('exams').select('*, sessions(id, is_completed)').eq('center_id', centerId),
-        supabase.from('student_subscriptions').select('*').eq('center_id', centerId)
+        supabase.from('exams').select('*, sessions(id, is_completed)').eq('center_id', centerId)
       ]);
 
       if (sRes.error) throw sRes.error;
       if (cRes.error) throw cRes.error;
       if (gRes.error) throw gRes.error;
       if (exRes.error) throw exRes.error;
-      if (subRes.error) throw subRes.error;
+      
+      // Batch fetch subscriptions
+      let allSubscriptions = [];
+      let fetchMoreSubs = true;
+      let fromIdxSubs = 0;
+      
+      while (fetchMoreSubs) {
+        const { data: batchSubs, error: subsError } = await supabase
+          .from('student_subscriptions')
+          .select('*')
+          .eq('center_id', centerId)
+          .range(fromIdxSubs, fromIdxSubs + step - 1);
+          
+        if (subsError) throw subsError;
+        
+        if (batchSubs && batchSubs.length > 0) {
+          allSubscriptions = allSubscriptions.concat(batchSubs);
+          if (batchSubs.length < step) {
+            fetchMoreSubs = false;
+          } else {
+            fromIdxSubs += step;
+          }
+        } else {
+          fetchMoreSubs = false;
+        }
+      }
 
       const newSessions = sRes.data || [];
       if (isLoadMore) {
@@ -99,7 +137,7 @@ export const useSessionData = () => {
       setStudents(allStudents);
       setGroups(gRes.data || []);
       setExams(exRes.data || []);
-      setSubscriptions(subRes.data || []);
+      setSubscriptions(allSubscriptions);
 
     } catch (err) {
       console.error('Fetch Error:', err);

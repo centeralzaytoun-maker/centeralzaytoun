@@ -64,20 +64,6 @@ export default function PrintCardPage() {
         }
     };
 
-    // توليد الباركود محلياً
-    useEffect(() => {
-        if (student && barcodeRef.current) {
-            JsBarcode(barcodeRef.current, student.unique_id, {
-                format: "CODE128",
-                width: 2,
-                height: 40,
-                displayValue: false,
-                margin: 0,
-                background: "transparent"
-            });
-        }
-    }, [student]);
-
     // عرض حالات التحميل والخطأ
     if (error) return <div className="p-10 text-center text-red-500 font-bold">❌ عذراً، لم يتم العثور على بيانات الطالب (يرجى المحاولة من لوحة التحكم).</div>;
     if (loading) return <div className="p-10 text-center font-bold text-blue-600 animate-pulse text-xl">جاري تجهيز الكارت...</div>;
@@ -140,10 +126,10 @@ export default function PrintCardPage() {
                 </div>
 
                 {/* الكارنيه الرئيسي */}
-                <div id="id-card" className="w-[450px] h-[270px] border-[2px] border-blue-600 rounded-2xl overflow-hidden bg-white flex flex-col text-right shadow-2xl print:shadow-none relative" dir="rtl">
+                <div id="id-card" className="w-[450px] h-[270px] border-[2px] border-emerald-600 rounded-2xl overflow-hidden bg-white flex flex-col text-right shadow-2xl print:shadow-none relative" dir="rtl">
                     
                     {/* Header */}
-                    <div className="bg-blue-600 h-[50px] text-white flex items-center justify-between px-5 relative z-20">
+                    <div className="bg-emerald-600 h-[50px] text-white flex items-center justify-between px-5 relative z-20">
                         <div className="flex items-center gap-2">
                             {centerConfig?.logo_url ? (
                                 <img 
@@ -166,48 +152,25 @@ export default function PrintCardPage() {
                     </div>
 
                     {/* Content Area */}
-                    <div className="flex flex-row flex-grow relative overflow-hidden p-3 pt-1">
+                    <div className="flex flex-col flex-grow relative overflow-hidden items-center justify-center p-3 pt-4">
                         <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
                             <FaUserGraduate size={150} />
                         </div>
 
-                        <div className="flex-[1.6] flex flex-col justify-between z-10 pr-1 h-full">
-                            <div>
-                                <h3 className="text-[22px] font-black text-blue-950 mb-0.5 leading-tight">{student.name}</h3>
-                                <div className="flex items-center gap-2 text-blue-700 font-bold text-[11px] mb-2">
-                                    <FaCheckCircle size={8} /> الصف: {student.grade}
-                                </div>
+                        <div className="z-10 flex flex-col items-center justify-center w-full mt-1">
+                            <div className="p-2 bg-white border-2 border-emerald-100 rounded-2xl shadow-sm w-[320px] flex flex-col items-center mb-2">
+                                <canvas ref={barcodeRef} className="h-20 w-full object-contain"></canvas>
+                                <p className="text-[18px] font-mono text-center font-black text-gray-800 mt-1 tracking-widest">{student.unique_id}</p>
                             </div>
-
-                            <div className="space-y-0.5 bg-gray-50/90 p-2 rounded-xl border border-gray-100 mb-1">
-                                 <div className="flex items-center justify-between text-[10px] text-gray-700 font-bold">
-                                     <span className="flex items-center gap-1"><FaUser size={7} className="text-blue-500"/> موبايل الطالب:</span>
-                                     <span className="font-mono">{student.phone || '---'}</span>
-                                 </div>
-                                 <div className="flex items-center justify-between text-[10px] text-gray-700 font-bold">
-                                     <span className="flex items-center gap-1"><FaPhoneAlt size={7} className="text-green-600"/> موبايل ولي الأمر:</span>
-                                     <span className="font-mono">{student.parent_phone || '---'}</span>
-                                 </div>
-                                 {centerConfig?.center_phone && (
-                                    <div className="flex items-center justify-between text-[10px] text-red-600 font-black border-t border-gray-200 mt-1 pt-1">
-                                        <span className="flex items-center gap-1"><FaHeadset size={8}/> تواصل مع السنتر:</span>
-                                        <span className="font-mono">{centerConfig.center_phone}</span>
-                                    </div>
-                                 )}
-                            </div>
-                        </div>
-
-                        <div className="flex-1 flex flex-col items-center justify-center border-r border-dashed border-gray-200 pl-1 h-full bg-gray-50/50">
-                            <p className="text-[10px] font-black text-blue-600 mb-2 uppercase">بوابة الطالب</p>
-                            <div className="p-1 bg-white border border-blue-50 rounded-lg shadow-sm w-[120px] flex flex-col items-center">
-                                <canvas ref={barcodeRef} className="h-10 w-full object-contain"></canvas>
-                                <p className="text-[7px] font-mono text-center font-black text-gray-500 mt-1">{student.unique_id}</p>
+                            
+                            <div className="inline-flex items-center justify-center gap-1.5 bg-emerald-50 text-emerald-800 px-3 py-0.5 rounded-full font-bold text-[10px] border border-emerald-100 shadow-sm w-fit mx-auto">
+                                <FaCheckCircle size={10} className="text-emerald-600" /> الصف الدراسي: {student.grade}
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-gray-100 h-[30px] flex items-center justify-center border-t border-gray-200">
-                        <p className="text-[10px] font-bold text-blue-600 italic">
+                        <p className="text-[10px] font-bold text-emerald-600 italic">
                             {centerConfig?.report_footer || "إدارة السنتر تتمنى لكم التوفيق"}
                         </p>
                     </div>

@@ -66,6 +66,7 @@ export default function StudentsPage() {
   const [currentStaffName, setCurrentStaffName] = useState(null); 
   const [specializations, setSpecializations] = useState([]); 
   const [selectedStudents, setSelectedStudents] = useState([]); // 🆕 Selected students for print
+  const [isAllPagesSelected, setIsAllPagesSelected] = useState(false); // 🆕 Select all pages
 
   
 
@@ -1068,11 +1069,75 @@ const handlePrintCard = (student) => {
   };
 
 // 🖨️ دالة طباعة كارنيهات الدفعة الحالية (أو الـ 50 طالب المعروضين)
-const handlePrintMultipleCards = () => {
+const handlePrintMultipleCards = async () => {
     let targetStudents = filteredStudents;
     
-    // إذا كان هناك طلاب محددين (Selected)، نطبعهم هم فقط
-    if (selectedStudents.length > 0) {
+    if (isAllPagesSelected) {
+        try {
+          const loadingToast = toast.loading('جاري تجهيز بيانات الطباعة لكل الصفحات...', { position: 'top-center' });
+          let allFilteredStudents = [];
+          let totalCount = 0;
+          const exportPageSize = 1000; 
+          let page = 1;
+
+          const firstParams = new URLSearchParams({
+            page: page,
+            pageSize: exportPageSize, 
+            search: debouncedSearchTerm,
+            grade: filterGrade,
+            course: filterCourse,
+            isFree: filterExempt,
+            centerId: centerId,
+            sort: 'asc',
+          });
+          if (filterGroup) {
+              firstParams.append('groupId', filterGroup);
+              const groupCourseId = groups.find(g => g.id === filterGroup)?.course_id;
+              if (groupCourseId) firstParams.append('groupCourseId', groupCourseId);
+          }
+
+          const firstRes = await fetch(`/api/students?${firstParams.toString()}`);
+          if (!firstRes.ok) throw new Error('فشل تحميل البيانات للطباعة');
+          
+          const firstData = await firstRes.json();
+          allFilteredStudents = firstData.students || [];
+          totalCount = firstData.totalCount || 0;
+
+          while (allFilteredStudents.length < totalCount) {
+            page++;
+            toast.loading(`جاري التجهيز... (${allFilteredStudents.length} من ${totalCount})`, { id: loadingToast });
+            
+            const nextParams = new URLSearchParams({
+              page: page,
+              pageSize: exportPageSize,
+              search: debouncedSearchTerm,
+              grade: filterGrade,
+              course: filterCourse,
+              isFree: filterExempt,
+              centerId: centerId,
+              sort: 'asc',
+            });
+            if (filterGroup) {
+                nextParams.append('groupId', filterGroup);
+                const groupCourseId = groups.find(g => g.id === filterGroup)?.course_id;
+                if (groupCourseId) nextParams.append('groupCourseId', groupCourseId);
+            }
+            const nextRes = await fetch(`/api/students?${nextParams.toString()}`);
+            if (!nextRes.ok) throw new Error('فشل تحميل البيانات');
+            const nextData = await nextRes.json();
+            allFilteredStudents = [...allFilteredStudents, ...(nextData.students || [])];
+          }
+
+          toast.success(`تم التجهيز بنجاح!`, { id: loadingToast });
+          targetStudents = allFilteredStudents;
+
+        } catch (error) {
+          console.error("Print all error:", error);
+          toast.error("❌ " + error.message);
+          return;
+        }
+    } else if (selectedStudents.length > 0) {
+        // إذا كان هناك طلاب محددين (Selected)، نطبعهم هم فقط
         targetStudents = students.filter(s => selectedStudents.includes(s.id));
     }
 
@@ -1086,11 +1151,15 @@ const handlePrintMultipleCards = () => {
       center: centerConfig 
     };
     
-    localStorage.setItem('print_cards_data', JSON.stringify(printPayload));
-
-    const printWindow = window.open(`/admin/students/print-cards`, '_blank');
-    if (printWindow) {
-        printWindow.focus();
+    try {
+        localStorage.setItem('print_cards_data', JSON.stringify(printPayload));
+        const printWindow = window.open(`/admin/students/print-cards`, '_blank');
+        if (printWindow) {
+            printWindow.focus();
+        }
+    } catch (e) {
+        console.error("Storage error:", e);
+        toast.error("❌ عدد الطلاب كبير جداً للطباعة مرة واحدة. يرجى تصفية النتائج وطباعتها على دفعات.");
     }
 };
 
@@ -2161,7 +2230,7 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
             >
                 <FaIdCard className="text-white" /> 
                 <span className="hidden sm:inline">
-                    {selectedStudents.length > 0 ? `طباعة (${selectedStudents.length}) طالب` : 'طباعة الكارنيهات'}
+                    {isAllPagesSelected ? `طباعة الكل (${totalStudents})` : selectedStudents.length > 0 ? `طباعة (${selectedStudents.length}) طالب` : 'طباعة الكارنيهات'}
                 </span>
                 <span className="sm:hidden">كارنيهات</span>
             </button>
@@ -2287,21 +2356,41 @@ ${student.access_code ? `🔢 *كود ولي الأمر:* ${student.access_code}
             </h3>
             
             {students.length > 0 && (
-                <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition shadow-sm">
-                    <input 
-                        type="checkbox" 
-                        className="w-4 h-4 accent-blue-600"
-                        checked={selectedStudents.length === students.length && students.length > 0}
-                        onChange={(e) => {
-                            if (e.target.checked) {
-                                setSelectedStudents(students.map(s => s.id));
-                            } else {
-                                setSelectedStudents([]);
-                            }
-                        }}
-                    />
-                    <span className="text-sm font-bold text-gray-700">تحديد الكل</span>
-                </label>
+                <div className="flex gap-3 flex-wrap">
+                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition shadow-sm">
+                        <input 
+                            type="checkbox" 
+                            className="w-4 h-4 accent-blue-600"
+                            checked={selectedStudents.length === students.length && students.length > 0 && !isAllPagesSelected}
+                            onChange={(e) => {
+                                setIsAllPagesSelected(false);
+                                if (e.target.checked) {
+                                    setSelectedStudents(students.map(s => s.id));
+                                } else {
+                                    setSelectedStudents([]);
+                                }
+                            }}
+                        />
+                        <span className="text-sm font-bold text-gray-700">تحديد الكل (الصفحة)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-purple-200 hover:bg-purple-50 transition shadow-sm">
+                        <input 
+                            type="checkbox" 
+                            className="w-4 h-4 accent-purple-600"
+                            checked={isAllPagesSelected}
+                            onChange={(e) => {
+                                setIsAllPagesSelected(e.target.checked);
+                                if (e.target.checked) {
+                                    setSelectedStudents(students.map(s => s.id));
+                                } else {
+                                    setSelectedStudents([]);
+                                }
+                            }}
+                        />
+                        <span className="text-sm font-bold text-purple-700">تحديد كل الصفحات ({totalStudents} طالب)</span>
+                    </label>
+                </div>
             )}
         </div>
 

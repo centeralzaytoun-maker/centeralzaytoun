@@ -350,8 +350,8 @@ export default function SessionsPage() {
     const finalPrice = parseFloat(newSession.price) || 0;
     const fixedShare = parseFloat(newSession.fixed_share) || 0;
 
-    if (!courseId || !topic || !groupId) {
-      alert('⚠️ بيانات ناقصة! تأكد من اختيار المادة، المجموعة، وعنوان الحصة.');
+    if (!courseId || !topic) {
+      alert('⚠️ بيانات ناقصة! تأكد من اختيار المادة وعنوان الحصة.');
       return;
     }
 
@@ -367,7 +367,7 @@ export default function SessionsPage() {
         .insert([{ 
           topic: topic, 
           course_id: courseId, 
-          group_id: groupId, 
+          group_id: groupId || null, 
           price: finalPrice, 
           fixed_share: fixedShare,
           scheduled_start_time: newSession.scheduled_start_time, 

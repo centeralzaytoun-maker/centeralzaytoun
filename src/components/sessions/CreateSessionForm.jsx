@@ -137,14 +137,15 @@ export const CreateSessionForm = ({
             value={newSession.course_id}
             onChange={(e) => {
               const c = courses.find(course => course.id === e.target.value);
+              const now = new Date();
               setNewSession({
                 ...newSession,
                 course_id: e.target.value,
                 price: c ? c.price : '',
                 fixed_share: c ? c.center_tax : '',
                 group_id: '',
-                topic: '',
-                scheduled_start_time: '',
+                topic: newSession.session_type === 'exam' ? newSession.topic : `حصة بتاريخ ${now.toLocaleDateString('ar-EG')}`,
+                scheduled_start_time: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                 linked_exam_id: ''
               });
             }}
@@ -159,7 +160,7 @@ export const CreateSessionForm = ({
 
         {/* اختيار المجموعة */}
         <div className="md:col-span-4">
-          <label className="text-xs font-bold text-blue-500 mb-1">3. المجموعة</label>
+          <label className="text-xs font-bold text-blue-500 mb-1">3. المجموعة (اختياري)</label>
           <select
             value={newSession.group_id}
             onChange={(e) => {
@@ -210,7 +211,6 @@ export const CreateSessionForm = ({
               });
             }}
             className="w-full p-2.5 border-2 border-blue-200 bg-blue-50 rounded-lg text-sm font-bold focus:border-blue-500 shadow-sm transition-all"
-            required
             disabled={!newSession.course_id}
           >
             <option value="">-- اختر المجموعة --</option>
@@ -226,9 +226,14 @@ export const CreateSessionForm = ({
           <label className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1">
             <FaCalendarAlt className="text-purple-500" /> {newSession.session_type === 'exam' ? 'عنوان الامتحان' : 'تفاصيل الحصة (آلي)'}
           </label>
-          <div className={`p-2.5 border-2 border-dashed rounded-lg bg-gray-50 text-[11px] font-black ${newSession.session_type === 'exam' ? 'border-red-200 text-red-600' : 'border-gray-200 text-gray-600'}`}>
-            {newSession.topic || "بانتظار اختيار المجموعة..."}
-          </div>
+          <input
+            type="text"
+            value={newSession.topic || ""}
+            onChange={e => setNewSession({ ...newSession, topic: e.target.value })}
+            placeholder="بانتظار اختيار المادة أو المجموعة..."
+            className={`w-full p-2.5 border-2 rounded-lg text-xs font-black ${newSession.session_type === 'exam' ? 'border-red-200 text-red-600 focus:border-red-500' : 'border-gray-200 text-gray-600 focus:border-gray-500'} outline-none`}
+            required
+          />
         </div>
 
         <div className="md:col-span-2">
