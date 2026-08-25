@@ -1820,10 +1820,13 @@ export const SessionModal = ({
                           type="text"
                           placeholder="وجه السكانر هنا..."
                           className="w-full p-2.5 pr-10 border-2 border-blue-400 rounded-lg outline-none focus:ring-4 focus:ring-blue-100 bg-white font-bold text-blue-800 shadow-sm"
-                          onChange={(e) => {
-                            setIsScanning(true);
-                            enhancedHandleBarcodeInput(e);
-                            setTimeout(() => setIsScanning(false), 100);
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              setIsScanning(true);
+                              enhancedHandleBarcodeInput(e);
+                              setTimeout(() => setIsScanning(false), 100);
+                            }
                           }}
                           onFocus={() => setIsScanning(true)}
                           onBlur={() => setIsScanning(false)}
