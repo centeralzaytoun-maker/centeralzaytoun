@@ -629,7 +629,7 @@ export const useScanner = (activeSession, students, handleAttendanceChange, grou
       return;
     }
 
-    if (e.key.length === 1 && /[0-9a-zA-Z]/.test(e.key)) {
+    if (e.key.length === 1 && /[0-9a-zA-Z\-_]/.test(e.key)) {
       console.log('🔍 Adding character to buffer:', e.key);
       barcodeBuffer.current += e.key;
     }
