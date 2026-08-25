@@ -619,7 +619,7 @@ export const useScanner = (activeSession, students, handleAttendanceChange, grou
           // 🆕 Clear scanned student if not found
           setScannedStudent(null);
           playSound('error'); // ❌ كود غير موجود
-          toast.error('لم يتم العثور على الطالب بهذا الكود', {
+          toast.error(`لم يتم العثور على الطالب بالكود: ${cleanCode}`, {
             duration: 3000,
             position: 'top-center'
           });
@@ -695,7 +695,7 @@ export const useScanner = (activeSession, students, handleAttendanceChange, grou
       // 🆕 Clear scanned student if not found
       setScannedStudent(null);
       new Audio('https://assets.mixkit.co/active_storage/sfx/1073-preview.mp3').play().catch(() => {});
-      toast.error('الكود غير صحيح أو طالب غير مسجل', {
+      toast.error(`الكود غير صحيح أو طالب غير مسجل بالكود: ${cleanCode}`, {
         duration: 3000,
         position: 'top-center'
       });
